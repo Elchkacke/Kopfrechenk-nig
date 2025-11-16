@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Kopfrechnen Trainer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .card {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 16px 20px 20px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+    }
+    h1 {
+      margin-top: 0;
+      text-align: center;
+    }
+    input[type="text"],
+    input[type="number"],
+    input[type="password"] {
+      width: 100%;
+      max-width: 260px;
+      padding: 6px 10px;
+      margin: 4px 0 8px;
+      border-radius: 8px;
+      border: 1px solid #d4d4d8;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      margin: 4px;
+      font-size: 14px;
+    }
+    button.primary { background:#2563eb; color:white; }
+    button.secondary { background:#e4e4e7; color:#111827; }
+
+    #taskBox {
+      margin-top:16px;
+      padding:12px;
+      border-radius:12px;
+      background:#f9fafb;
+      display:none;
+    }
+    #resultBox {
+      margin-top:16px;
+      padding:12px;
+      border-radius:12px;
+      background:#ecfdf3;
+      display:none;
+    }
+    .label { font-weight:600; }
+    #status { margin-top:8px; font-size:14px; color:#4b5563; }
+
+    table.result-table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+      margin-top:12px;
+    }
+    .result-table th,
+    .result-table td {
+      border-bottom:1px solid #e4e4e7;
+      padding:6px;
+      text-align:left;
+    }
+    .result-table tr:nth-child(even) {
+      background:#f9fafb;
+    }
+    .result-table .bad-row {
+      background:#fef2f2;
+    }
+    .stats-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+      gap:8px;
+      margin-top:12px;
+      text-align:left;
+    }
+    .stats-grid div {
+      background:#f4f4f5;
+      border-radius:8px;
+      padding:8px;
+    }
+
+    /* Lehrer-Leiste */
+    #topBar {
+      max-width:600px;
+      margin:0 auto 8px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    #cfgInfo {
+      font-size:13px;
+      color:#4b5563;
+      text-align:left;
+      flex:1;
+    }
+    #topButtons {
+      display:flex;
+      gap:4px;
+      flex-wrap:wrap;
+    }
+
+    /* Lehrer-Menü (Overlay) */
+    #teacherOverlay {
+      position:fixed;
+      inset:0;
+      display:none;
+      background:rgba(0,0,0,0.4);
+      align-items:center;
+      justify-content:center;
+      z-index:999;
+    }
+    #teacherPanel {
+      background:white;
+      border-radius:12px;
+      max-width:420px;
+      width:95%;
+      padding:16px;
+      box-shadow:0 4px 25px rgba(0,0,0,0.2);
+      text-align:left;
+    }
+    #teacherPanel h2 { margin-top:0; text-align:center; }
+    #teacherPanel label { display:block; margin:6px 0 2px; font-size:14px; font-weight:600; }
+    #teacherPanel input[type="number"],
+    #teacherPanel input[type="password"] {
+      width:100%;
+      max-width:none;
+      margin-bottom:6px;
+    }
+    #teacherPanel .row { display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
+    #teacherMsg { font-size:13px; color:#4b5563; margin-top:4px; min-height:18px; }
+    .ops-row { display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
+    .chip {
+      display:inline-block;
+      border-radius:999px;
+      border:1px solid #d4d4d8;
+      padding:4px 10px;
+      cursor:pointer;
+      font-weight:600;
+      user-select:none;
+      font-size:14px;
+    }
+    .chip.active {
+      background:#2563eb;
+      color:white;
+      border-color:#2563eb;
+    }
+
+    /* Dashboard Overlay */
+    #dashboardOverlay {
+      position:fixed;
+      inset:0;
+      display:none;
+      background:rgba(0,0,0,0.4);
+      align-items:center;
+      justify-content:center;
+      z-index:998;
+    }
+    #dashboardPanel {
+      background:white;
+      border-radius:12px;
+      max-width:700px;
+      width:95%;
+      max-height:90vh;
+      overflow:auto;
+      padding:18px;
+      box-shadow:0 4px 25px rgba(0,0,0,0.2);
+      text-align:left;
+    }
+    #dashboardPanel h2 { margin-top:0; }
+    #dashboardPanel table { font-size:13px; }
+  </style>
+
+  <!-- Konfiguration (PIN, Server-URL, Startwerte) -->
+  <script src="config.js"></script>
+</head>
+<body>
+  <!-- Lehrer-Leiste -->
+  <div id="topBar">
+    <div id="cfgInfo">Konfiguration: wird geladen …</div>
+    <div id="topButtons">
+      <button id="btnDashboard" class="secondary">📊 Dashboard</button>
+      <button id="btnTeacher" class="secondary">⚙️ Lehrer-Menü</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1>🧮 Kopfrechnen Trainer</h1>
+
+    <!-- Startbereich: Name & Klasse -->
+    <div id="startBox">
+      <p>Bitte Name und Klasse eingeben:</p>
+      <div>
+        <div class="label">Name</div>
+        <input id="inpName" type="text" placeholder="Vorname Nachname">
+      </div>
+      <div>
+        <div class="label">Klasse</div>
+        <input id="inpClass" type="text" placeholder="z. B. 5a">
+      </div>
+      <button id="btnStart" class="primary">Los geht’s</button>
+    </div>
+
+    <!-- Aufgabenbereich -->
+    <div id="taskBox">
+      <div id="taskHeader" class="label"></div>
+      <div id="taskText" style="font-size:26px; margin:12px 0;"></div>
+      <div>
+        <div>Deine Antwort:</div>
+        <input id="inpAnswer" type="number" inputmode="decimal">
+      </div>
+      <button id="btnNext" class="primary">Weiter</button>
+      <button id="btnAbort" class="secondary">Abbrechen</button>
+    </div>
+
+    <!-- Ergebnisbereich -->
+    <div id="resultBox">
+      <h3>Auswertung</h3>
+      <div id="resultText"></div>
+      <div id="detailTable"></div>
+      <div id="hotspotSummary"></div>
+      <div id="status"></div>
+      <button id="btnRestart" class="secondary">Neue Runde</button>
+    </div>
+  </div>
+
+  <!-- Lehrer-Menü Overlay -->
+  <div id="teacherOverlay">
+    <div id="teacherPanel">
+      <h2>Lehrer-Konfiguration</h2>
+
+      <label for="teacherPin">Lehrer-PIN</label>
+      <input type="password" id="teacherPin" placeholder="PIN eingeben">
+
+      <label>Anzahl Aufgaben</label>
+      <input type="number" id="cfgCount" min="1" max="200">
+
+      <label>Zahlenbereich (Min / Max)</label>
+      <div class="row">
+        <input type="number" id="cfgMin" placeholder="Min">
+        <input type="number" id="cfgMax" placeholder="Max">
+      </div>
+
+      <label>Rechenarten</label>
+      <div class="ops-row" id="opsRow">
+        <div class="chip" data-op="+">+</div>
+        <div class="chip" data-op="-">−</div>
+        <div class="chip" data-op="*">×</div>
+        <div class="chip" data-op="/">÷</div>
+      </div>
+
+      <label>Multiplikations-Max (×)</label>
+      <input type="number" id="cfgMultMax">
+
+      <label>Divisions-Max (÷)</label>
+      <input type="number" id="cfgDivMax">
+
+      <label><input type="checkbox" id="cfgNeg"> Negative Ergebnisse erlauben</label><br>
+      <label><input type="checkbox" id="cfgDivInt" checked> Division nur ganzzahlig</label><br>
+      <label><input type="checkbox" id="cfgEven"> Nur gerade Zahlen</label>
+
+      <div id="teacherMsg"></div>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="teacherApply" class="primary">Übernehmen</button>
+        <button id="teacherClose" class="secondary">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Overlay -->
+  <div id="dashboardOverlay">
+    <div id="dashboardPanel">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <h2 style="margin:0">📊 Lehrer-Dashboard</h2>
+        <button id="dashboardClose" class="secondary">Schließen</button>
+      </div>
+      <div id="dashboardContent">Noch keine Ergebnisse vorhanden.</div>
+    </div>
+  </div>
+
+  <!-- Hauptlogik -->
+  <script>
+    /********** 2. Konfiguration **********/
+    // Standardwerte – werden durch SERVER_CONFIG überschrieben, falls vorhanden
+    let CONFIG = {
+      count: 10,
+      min: 1,
+      max: 150,
+      ops: ['+','-','*','/'],
+      allowNeg: false,
+      divInt: true,
+      multMax: 12,
+      divMax: 12,
+      evenOnly: false
+    };
+
+    if (window.SERVER_CONFIG && typeof window.SERVER_CONFIG === 'object') {
+      CONFIG = Object.assign(CONFIG, window.SERVER_CONFIG);
+    }
+
+    const S = id => document.getElementById(id);
+
+    function updateCfgInfo(){
+      const opsText = (CONFIG.ops && CONFIG.ops.length) ? CONFIG.ops.join(' ') : '—';
+      S('cfgInfo').textContent =
+        `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
+    }
+
+    /********** Aufgaben-Generator **********/
+    function randInt(a,b){
+      return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
+
+    function randEven(a,b){
+      let start = a % 2 === 0 ? a : a + 1;
+      if (start > b) return randInt(a,b);
+      const range = Math.floor((b - start) / 2);
+      return start + 2 * Math.floor(Math.random() * (range + 1));
+    }
+
+    function pickNumber(min,max){
+      if (!CONFIG.evenOnly) return randInt(min,max);
+      return randEven(min,max);
+    }
+
+    function generateTask(){
+      const ops = CONFIG.ops && CONFIG.ops.length ? CONFIG.ops : ['+'];
+      const op = ops[Math.floor(Math.random() * ops.length)];
+      let a, b, erg;
+
+      if (op === '+') {
+        a = pickNumber(CONFIG.min, CONFIG.max);
+        b = pickNumber(CONFIG.min, CONFIG.max);
+        erg = a + b;
+      } else if (op === '-') {
+        a = pickNumber(CONFIG.min, CONFIG.max);
+        b = pickNumber(CONFIG.min, CONFIG.max);
+        erg = a - b;
+        if (!CONFIG.allowNeg && erg < 0) {
+          const tmp = a; a = b; b = tmp;
+          erg = a - b;
+        }
+      } else if (op === '*') {
+        a = pickNumber(1, CONFIG.multMax || 12);
+        b = pickNumber(1, CONFIG.multMax || 12);
+        erg = a * b;
+      } else if (op === '/') {
+        if (CONFIG.divInt) {
+          b = pickNumber(1, CONFIG.divMax || 12);
+          erg = pickNumber(1, CONFIG.divMax || 12);
+          a = b * erg;
+        } else {
+          b = pickNumber(1, CONFIG.divMax || 12);
+          a = pickNumber(1, (CONFIG.divMax || 12) * (CONFIG.divMax || 12));
+          erg = a / b;
+        }
+      } else {
+        a = pickNumber(CONFIG.min, CONFIG.max);
+        b = pickNumber(CONFIG.min, CONFIG.max);
+        erg = a + b;
+      }
+      return { a, b, op, erg };
+    }
+
+    /********** Zustände **********/
+    let currentIndex = 0;
+    let tasks = [];
+    let answers = [];
+    let startTime = null;
+    let questionStart = null;
+    let taskDurations = [];
+    let studentName = '';
+    let studentClass = '';
+
+    /********** UI-Funktionen **********/
+    function showStart(){
+      S('startBox').style.display = 'block';
+      S('taskBox').style.display = 'none';
+      S('resultBox').style.display = 'none';
+      S('status').textContent = '';
+    }
+
+    function showTask(){
+      S('startBox').style.display = 'none';
+      S('taskBox').style.display = 'block';
+      S('resultBox').style.display = 'none';
+
+      const t = tasks[currentIndex];
+      S('taskHeader').textContent = 'Aufgabe ' + (currentIndex + 1) + ' von ' + CONFIG.count;
+      S('taskText').textContent = t.a + ' ' + t.op + ' ' + t.b + ' = ?';
+      S('inpAnswer').value = '';
+      S('inpAnswer').focus();
+      questionStart = Date.now();
+    }
+
+    function showResult(){
+      S('startBox').style.display = 'none';
+      S('taskBox').style.display = 'none';
+      S('resultBox').style.display = 'block';
+
+      let correct = 0;
+      let detail = '';
+      const rows = [];
+      const opStats = {};
+
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        const userAns = answers[i];
+        const ok = Math.abs(userAns - t.erg) < 0.0001;
+        if (ok) correct++;
+        const duration = taskDurations[i] || 0;
+        const stat = opStats[t.op] || { total:0, correct:0, time:0 };
+        stat.total += 1;
+        stat.time += duration;
+        if (ok) stat.correct += 1;
+        opStats[t.op] = stat;
+
+        detail +=
+          (i+1) + '. ' +
+          t.a + ' ' + t.op + ' ' + t.b +
+          ' = ' + t.erg +
+          ' (deine Antwort: ' + userAns + (ok ? ' ✓' : ' ✗') + ')<br>';
+
+        rows.push(
+          `<tr class="${ok ? '' : 'bad-row'}">
+             <td>${i+1}</td>
+             <td>${t.a} ${t.op} ${t.b}</td>
+             <td>${t.erg}</td>
+             <td>${userAns ?? '—'}</td>
+             <td>${ok ? '✓' : '✗'}</td>
+             <td>${duration.toFixed(1)} s</td>
+           </tr>`
+        );
+      }
+
+      const total = tasks.length;
+      const durationSec = (Date.now() - startTime) / 1000;
+      const pct = total > 0 ? (correct / total * 100 * 1.0).toFixed(1) : '0.0';
+
+      S('resultText').innerHTML =
+        '<p>' + studentName + ' (' + studentClass + ')</p>' +
+        '<p>Richtig: ' + correct + ' von ' + total + ' (' + pct + '%)</p>' +
+        '<p>Gesamtzeit: ' + durationSec.toFixed(1) + ' s (Ø ' +
+        (durationSec/total).toFixed(2) + ' s pro Aufgabe)</p>' +
+        '<hr>' + detail;
+
+      S('detailTable').innerHTML =
+        '<table class="result-table"><thead><tr><th>#</th><th>Aufgabe</th><th>Lösung</th><th>Antwort</th><th>Richtig?</th><th>Zeit</th></tr></thead><tbody>' +
+        rows.join('') + '</tbody></table>';
+
+      const hotspotBlocks = Object.entries(opStats).map(([op, stat]) => {
+        const acc = stat.total ? (stat.correct / stat.total * 100).toFixed(1) : '0.0';
+        const avgTime = stat.total ? (stat.time / stat.total).toFixed(1) : '0.0';
+        const highlight = stat.correct / stat.total < 0.75 ? ' style="color:#b91c1c;font-weight:600;"' : '';
+        return `<div${highlight}>
+                  <div class="label">${op}</div>
+                  <div>Trefferquote: ${acc}%</div>
+                  <div>Ø Zeit: ${avgTime} s</div>
+                </div>`;
+      });
+
+      S('hotspotSummary').innerHTML =
+        '<div class="label" style="margin-top:16px;">Fehlerschwerpunkte & Zeit</div>' +
+        '<div class="stats-grid">' + (hotspotBlocks.join('') || '<div>Keine Daten</div>') + '</div>';
+
+      sendResults(total, correct, durationSec);
+      storeRun(total, correct, durationSec, opStats);
+    }
+
+    /********** Ergebnisse + Aufgaben an Server senden **********/
+    async function sendResults(total, correct, timeSec){
+      S('status').textContent = 'Sende Ergebnisse …';
+
+      const taskPayload = tasks.map((t, idx) => {
+        const ans = answers[idx];
+        const ok = Math.abs(ans - t.erg) < 0.0001;
+        return {
+          index: idx + 1,
+          a: t.a,
+          b: t.b,
+          op: t.op,
+          answer: ans,
+          solution: t.erg,
+          correct: ok
+        };
+      });
+
+      const payload = {
+        run_id: 'run-' + Date.now(),
+        name: studentName,
+        group: studentClass,
+        total: total,
+        correct: correct,
+        time: timeSec,
+        score: correct * 10,
+        tasks: taskPayload,
+        durations: taskDurations
+      };
+
+      try {
+        await fetch(SERVER_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify(payload)
+        });
+        S('status').textContent = 'Ergebnisse wurden an den Server gesendet.';
+      } catch (e) {
+        S('status').textContent = 'Netzwerkfehler beim Senden: ' + e.message;
+        console.error('SEND ERROR', e);
+      }
+    }
+
+    /********** Schüler-Events **********/
+    S('btnStart').addEventListener('click', () => {
+      studentName = S('inpName').value.trim();
+      studentClass = S('inpClass').value.trim();
+      if (!studentName || !studentClass) {
+        alert('Bitte Name und Klasse eingeben.');
+        return;
+      }
+      tasks = [];
+      answers = [];
+      taskDurations = [];
+      for (let i = 0; i < CONFIG.count; i++) {
+        tasks.push(generateTask());
+      }
+      currentIndex = 0;
+      startTime = Date.now();
+      questionStart = Date.now();
+      showTask();
+    });
+
+    S('btnNext').addEventListener('click', () => {
+      const val = S('inpAnswer').value;
+      if (val === '') {
+        alert('Bitte eine Antwort eingeben.');
+        return;
+      }
+      answers[currentIndex] = Number(val);
+      if (questionStart) {
+        taskDurations[currentIndex] = (Date.now() - questionStart) / 1000;
+      }
+      if (currentIndex < CONFIG.count - 1) {
+        currentIndex++;
+        showTask();
+      } else {
+        showResult();
+      }
+    });
+
+    S('btnAbort').addEventListener('click', () => {
+      if (confirm('Willst du wirklich abbrechen?')) {
+        showStart();
+      }
+    });
+
+    S('btnRestart').addEventListener('click', () => {
+      showStart();
+    });
+
+    S('inpAnswer').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        S('btnNext').click();
+      }
+    });
+
+    /********** Lehrer-Menü **********/
+    const overlay = S('teacherOverlay');
+    const opsRow = S('opsRow');
+
+    function openTeacher(){
+      S('cfgCount').value   = CONFIG.count;
+      S('cfgMin').value     = CONFIG.min;
+      S('cfgMax').value     = CONFIG.max;
+      S('cfgMultMax').value = CONFIG.multMax;
+      S('cfgDivMax').value  = CONFIG.divMax;
+      S('cfgNeg').checked   = CONFIG.allowNeg;
+      S('cfgDivInt').checked= CONFIG.divInt;
+      S('cfgEven').checked  = CONFIG.evenOnly;
+
+      const set = new Set((CONFIG.ops || ['+']).map(String));
+      Array.from(opsRow.querySelectorAll('.chip')).forEach(ch=>{
+        ch.classList.toggle('active', set.has(ch.dataset.op));
+      });
+
+      S('teacherMsg').textContent = '';
+      S('teacherPin').value = '';
+      overlay.style.display = 'flex';
+    }
+    function closeTeacher(){ overlay.style.display = 'none'; }
+
+    S('btnTeacher').addEventListener('click', openTeacher);
+    S('teacherClose').addEventListener('click', closeTeacher);
+    overlay.addEventListener('click', (e)=>{
+      if (e.target === overlay) closeTeacher();
+    });
+
+    opsRow.addEventListener('click', (e)=>{
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      chip.classList.toggle('active');
+    });
+
+    S('teacherApply').addEventListener('click', ()=>{
+      const pin = S('teacherPin').value.trim();
+      if (pin !== TEACHER_PIN) {
+        S('teacherMsg').textContent = 'Falsche PIN.';
+        return;
+      }
+      const newCfg = {
+        count: Number(S('cfgCount').value || CONFIG.count),
+        min: Number(S('cfgMin').value || CONFIG.min),
+        max: Number(S('cfgMax').value || CONFIG.max),
+        multMax: Number(S('cfgMultMax').value || CONFIG.multMax),
+        divMax: Number(S('cfgDivMax').value || CONFIG.divMax),
+        allowNeg: !!S('cfgNeg').checked,
+        divInt: !!S('cfgDivInt').checked,
+        evenOnly: !!S('cfgEven').checked,
+        ops: []
+      };
+      const activeOps = Array.from(opsRow.querySelectorAll('.chip.active')).map(ch=>ch.dataset.op);
+      newCfg.ops = activeOps.length ? activeOps : ['+'];
+
+      CONFIG = newCfg;
+      updateCfgInfo();
+      S('teacherMsg').textContent = 'Konfiguration übernommen (Server wird aktualisiert …)';
+
+      // zentrale Konfig an den Server senden
+      const payload = {
+        type: 'config',
+        admin_key: TEACHER_PIN,
+        config: CONFIG
+      };
+      fetch(SERVER_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      }).catch(e => {
+        console.error('CONFIG SEND ERROR', e);
+      });
+
+      setTimeout(closeTeacher, 700);
+    });
+
+    /********** Dashboard-Button + lokales Dashboard **********/
+    const dashOverlay = S('dashboardOverlay');
+    const dashContent = S('dashboardContent');
+
+    function openDashboard(){
+      dashOverlay.style.display = 'flex';
+      renderDashboard();
+    }
+    function closeDashboard(){ dashOverlay.style.display = 'none'; }
+
+    S('dashboardClose').addEventListener('click', closeDashboard);
+    dashOverlay.addEventListener('click', (e)=>{
+      if (e.target === dashOverlay) closeDashboard();
+    });
+
+    S('btnDashboard').addEventListener('click', () => {
+      const pin = prompt('Lehrer-PIN für Dashboard:');
+      if (pin === null) return;
+      if (pin.trim() !== TEACHER_PIN) {
+        alert('Falsche PIN.');
+        return;
+      }
+      openDashboard();
+    });
+
+    const STORAGE_KEY = 'kopftrainer_runs';
+
+    function loadRuns(){
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      } catch (e) {
+        console.error('LOAD RUNS', e);
+        return [];
+      }
+    }
+
+    function saveRuns(runs){
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(runs.slice(0, 200)));
+      } catch (e) {
+        console.error('SAVE RUNS', e);
+      }
+    }
+
+    function storeRun(total, correct, timeSec, opStats){
+      const runs = loadRuns();
+      runs.unshift({
+        ts: Date.now(),
+        name: studentName,
+        group: studentClass,
+        total,
+        correct,
+        timeSec,
+        opStats,
+        accuracy: total ? correct / total : 0
+      });
+      saveRuns(runs);
+    }
+
+    function renderDashboard(){
+      const runs = loadRuns();
+      if (!runs.length) {
+        dashContent.textContent = 'Es liegen noch keine lokalen Ergebnisse vor.';
+        return;
+      }
+
+      const avgAcc = (runs.reduce((sum,r)=>sum + (r.accuracy||0),0) / runs.length * 100).toFixed(1);
+      const avgTime = (runs.reduce((sum,r)=>sum + (r.timeSec||0),0) / runs.length).toFixed(1);
+
+      const lastRuns = runs.slice(0, 12).map(r => {
+        const date = new Date(r.ts).toLocaleString();
+        const pct = (r.accuracy * 100).toFixed(1);
+        const timeText = (r.timeSec || 0).toFixed(1);
+        return `<tr>
+                  <td>${date}</td>
+                  <td>${r.name}</td>
+                  <td>${r.group}</td>
+                  <td>${r.correct}/${r.total}</td>
+                  <td>${pct}%</td>
+                  <td>${timeText} s</td>
+                </tr>`;
+      }).join('');
+
+      const combinedOps = {};
+      runs.forEach(run => {
+        Object.entries(run.opStats || {}).forEach(([op, stat]) => {
+          const block = combinedOps[op] || { total:0, correct:0, time:0 };
+          block.total += stat.total || 0;
+          block.correct += stat.correct || 0;
+          block.time += stat.time || 0;
+          combinedOps[op] = block;
+        });
+      });
+
+      const hotspotTable = Object.entries(combinedOps)
+        .map(([op, stat]) => {
+          const acc = stat.total ? (stat.correct / stat.total * 100).toFixed(1) : '0.0';
+          const avg = stat.total ? (stat.time / stat.total).toFixed(1) : '0.0';
+          return { op, stat, acc, avg };
+        })
+        .sort((a,b) => Number(a.acc) - Number(b.acc))
+        .map(row => `<tr>
+                       <td>${row.op}</td>
+                       <td>${row.stat.correct}/${row.stat.total}</td>
+                       <td>${row.acc}%</td>
+                       <td>${row.avg} s</td>
+                     </tr>`)
+        .join('');
+
+      dashContent.innerHTML = `
+        <div class="stats-grid">
+          <div>
+            <div class="label">Gesamttrainings</div>
+            <div style="font-size:24px;">${runs.length}</div>
+          </div>
+          <div>
+            <div class="label">Ø Trefferquote</div>
+            <div style="font-size:24px;">${avgAcc}%</div>
+          </div>
+          <div>
+            <div class="label">Ø Zeit pro Training</div>
+            <div style="font-size:24px;">${avgTime} s</div>
+          </div>
+        </div>
+
+        <h3>Letzte Ergebnisse</h3>
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Name</th>
+              <th>Klasse</th>
+              <th>Richtig</th>
+              <th>Quote</th>
+              <th>Zeit</th>
+            </tr>
+          </thead>
+          <tbody>${lastRuns}</tbody>
+        </table>
+
+        <h3>Fehlerschwerpunkte (alle Schüler)</h3>
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>Operator</th>
+              <th>Richtig</th>
+              <th>Quote</th>
+              <th>Ø Zeit</th>
+            </tr>
+          </thead>
+          <tbody>${hotspotTable || '<tr><td colspan="4">Keine Daten</td></tr>'}</tbody>
+        </table>
+      `;
+    }
+
+    // Startzustand
+    updateCfgInfo();
+    showStart();
+  </script>
+</body>
+</html>

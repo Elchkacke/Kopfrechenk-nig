@@ -506,16 +506,17 @@
         };
       });
 
-      const payload = {
-        run_id: 'run-' + Date.now(),
-        name: studentName,
-        group: studentClass,
-        total: total,
-        correct: correct,
-        time: timeSec,
-        score: correct * 10,
-        tasks: taskPayload,
-        durations: taskDurations
+     const payload = {
+  run_id: 'run-' + Date.now(),
+  name: studentName,
+  group: studentClass,
+  total: total,
+  correct: correct,
+  time: timeSec,
+  score: correct * 10,
+  tasks: taskPayload,
+  durations: taskDurations,
+  admin_key: "1234" // NEU
       };
 
       try {

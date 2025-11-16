@@ -1,21 +1,19 @@
 // Lehrer-PIN (bitte anpassen)
 const TEACHER_PIN = "1234";
 
-// Server-URL, an die die Ergebnisse geschickt werden.
-// Wenn du noch keinen Server hast, lass eine Dummy-URL drin
-// oder setze sie auf eine echte URL (z.B. Google Apps Script Web-App).
-const SERVER_URL = "https://script.google.com/macros/s/AKfycbxmHegvBVeMLwqRP8yLcm6NzIfhlc6-IRHxxp-NoEp7aH157qX4GjyQI1tBv5EtQQzGGA/exec";
+// Server-URL für Ergebnis-Speicherung.
+// Wenn du keinen Server hast: Dummy-URL lassen.
+const SERVER_URL = "https://example.com/no-server";
 
-// Optionale Start-Konfiguration vom Server.
-// Wenn du das nicht brauchst, kannst du SERVER_CONFIG weglassen.
+// Start-Konfiguration (überschreibt die Default-Werte aus index.html)
 window.SERVER_CONFIG = {
-  count: 10,        // Anzahl Aufgaben
-  min: 1,           // kleinste Zahl
-  max: 150,         // größte Zahl
-  ops: ["+", "-", "*", "/"], // erlaubte Rechenarten
-  allowNeg: false,  // negative Ergebnisse erlauben
-  divInt: true,     // Division nur ganzzahlig
-  multMax: 12,      // max. Faktor bei Multiplikation
-  divMax: 12,       // max. Teiler bei Division
-  evenOnly: false   // "Nur gerade Zahlen" voreingestellt?
+  count: 10,
+  min: 1,
+  max: 150,
+  ops: ["+", "-", "*", "/"],
+  allowNeg: false,
+  divInt: true,
+  multMax: 12,
+  divMax: 12,
+  evenOnly: false
 };

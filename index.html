@@ -726,11 +726,105 @@
       saveRuns(runs);
     }
 
-    function renderDashboard(){
-      const runs = loadRuns();
-      if (!runs.length) {
-        dashContent.textContent = 'Es liegen noch keine lokalen Ergebnisse vor.';
+  function renderDashboard(){
+  dashContent.textContent = 'Lade Daten vom Server …';
+
+  // Optional: PIN als Parameter mitschicken, falls REQUIRED_PIN im Script gesetzt ist
+  const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN);
+
+  fetch(url)
+    .then(resp => resp.json())
+    .then(data => {
+      if (!data || !data.ok) {
+        dashContent.textContent = 'Fehler vom Server: ' + (data && data.error ? data.error : 'Unbekannter Fehler');
         return;
+      }
+
+      const runs = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
+      const stats = data.stats || {};
+      const totalRuns = stats.totalRuns || runs.length;
+      const avgAcc = (stats.avgAcc || 0).toFixed(1);
+      const avgTime = (stats.avgTime || 0).toFixed(1);
+
+      const lastRunsRows = runs.slice(0, 12).map(r => {
+        const dateStr = new Date(r.ts).toLocaleString();
+        const pct = r.total ? (r.correct / r.total * 100).toFixed(1) : '0.0';
+        const timeText = (r.time || 0).toFixed(1);
+        return `<tr>
+                  <td>${dateStr}</td>
+                  <td>${r.name}</td>
+                  <td>${r.group}</td>
+                  <td>${r.correct}/${r.total}</td>
+                  <td>${pct}%</td>
+                  <td>${timeText} s</td>
+                </tr>`;
+      }).join('');
+
+      const opStats = (stats.opStats) || {};
+      const hotspotRows = Object.entries(opStats)
+        .map(([op, stat]) => {
+          const acc = stat.total ? (stat.correct / stat.total * 100).toFixed(1) : '0.0';
+          const avg = stat.total ? (stat.time / stat.total).toFixed(1) : '0.0';
+          return { op, stat, acc, avg };
+        })
+        .sort((a,b) => Number(a.acc) - Number(b.acc))
+        .map(row => `<tr>
+                       <td>${row.op}</td>
+                       <td>${row.stat.correct}/${row.stat.total}</td>
+                       <td>${row.acc}%</td>
+                       <td>${row.avg} s</td>
+                     </tr>`)
+        .join('');
+
+      dashContent.innerHTML = `
+        <div class="stats-grid">
+          <div>
+            <div class="label">Gesamttrainings</div>
+            <div style="font-size:24px;">${totalRuns}</div>
+          </div>
+          <div>
+            <div class="label">Ø Trefferquote</div>
+            <div style="font-size:24px;">${avgAcc}%</div>
+          </div>
+          <div>
+            <div class="label">Ø Zeit pro Training</div>
+            <div style="font-size:24px;">${avgTime} s</div>
+          </div>
+        </div>
+
+        <h3>Letzte Ergebnisse (alle Geräte)</h3>
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Name</th>
+              <th>Klasse</th>
+              <th>Richtig</th>
+              <th>Quote</th>
+              <th>Zeit</th>
+            </tr>
+          </thead>
+          <tbody>${lastRunsRows || '<tr><td colspan="6">Noch keine Daten</td></tr>'}</tbody>
+        </table>
+
+        <h3>Fehlerschwerpunkte (alle Schüler)</h3>
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>Operator</th>
+              <th>Richtig</th>
+              <th>Quote</th>
+              <th>Ø Zeit</th>
+            </tr>
+          </thead>
+          <tbody>${hotspotRows || '<tr><td colspan="4">Keine Daten</td></tr>'}</tbody>
+        </table>
+      `;
+    })
+    .catch(err => {
+      dashContent.textContent = 'Fehler beim Laden: ' + err.message;
+    });
+}
       }
 
       const avgAcc = (runs.reduce((sum,r)=>sum + (r.accuracy||0),0) / runs.length * 100).toFixed(1);

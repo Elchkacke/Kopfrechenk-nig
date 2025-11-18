@@ -1,6 +1,6 @@
 const TEACHER_PIN = "1234";
 
-const SERVER_URL = "https://script.google.com/macros/s/AKfycbx1Fp2z4frJxAOjR1qUctCHsQb7pxIipNvIGvYlXqxwLKeOE2UbPyrQZqkS20_BXzsSEA/exec";
+const SERVER_URL = "https://script.google.com/macros/s/AKfycbzr3TwqdhS0COuFE4HDtRtovGpNK27qpZBn3zOIU1AiLxgb-R_Ns7ZQB8gfRXdm1FFaQw/exec";
 
 window.SERVER_CONFIG = {
   count: 10,

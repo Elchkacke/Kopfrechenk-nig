@@ -793,8 +793,8 @@
     }
 
     // Startzustand
+        // Startzustand
     updateCfgInfo();
-    showStart();
         function loadRemoteConfig(){
       const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
 
@@ -810,7 +810,8 @@
           console.error('CONFIG LOAD ERROR', err);
         });
     }
-
+    loadRemoteConfig();  // zentrale Einstellungen nachladen
+    showStart();
   </script>
 </body>
 </html>

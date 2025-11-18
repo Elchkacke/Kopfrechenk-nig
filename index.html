@@ -795,6 +795,22 @@
     // Startzustand
     updateCfgInfo();
     showStart();
+        function loadRemoteConfig(){
+      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
+
+      fetch(url)
+        .then(resp => resp.json())
+        .then(data => {
+          if (data && data.ok && data.config) {
+            CONFIG = Object.assign(CONFIG, data.config);
+            updateCfgInfo();
+          }
+        })
+        .catch(err => {
+          console.error('CONFIG LOAD ERROR', err);
+        });
+    }
+
   </script>
 </body>
 </html>

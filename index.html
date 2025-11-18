@@ -299,8 +299,7 @@
     </div>
   </div>
 
-  
-      <!-- Hauptlogik -->
+  <!-- Hauptlogik -->
   <script>
     /********** 2. Konfiguration **********/
     // Standardwerte – werden durch SERVER_CONFIG überschrieben, falls vorhanden
@@ -326,6 +325,23 @@
       const opsText = (CONFIG.ops && CONFIG.ops.length) ? CONFIG.ops.join(' ') : '—';
       S('cfgInfo').textContent =
         `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
+    }
+
+    // zentrale Konfiguration vom Server laden
+    function loadRemoteConfig(){
+      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
+
+      fetch(url)
+        .then(resp => resp.json())
+        .then(data => {
+          if (data && data.ok && data.config) {
+            CONFIG = Object.assign(CONFIG, data.config);
+            updateCfgInfo();
+          }
+        })
+        .catch(err => {
+          console.error('CONFIG LOAD ERROR', err);
+        });
     }
 
     /********** Aufgaben-Generator **********/
@@ -649,7 +665,7 @@
       updateCfgInfo();
       S('teacherMsg').textContent = 'Konfiguration übernommen (Server wird aktualisiert …)';
 
-      // zentrale Konfig an den Server senden (optional)
+      // zentrale Konfig an den Server senden
       const payload = {
         type: 'config',
         admin_key: TEACHER_PIN,
@@ -695,7 +711,6 @@
     function renderDashboard(){
       dashContent.textContent = 'Lade Daten vom Server …';
 
-      // PIN als Parameter mitschicken, falls REQUIRED_PIN im Script gesetzt ist
       const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN);
 
       fetch(url)
@@ -793,23 +808,7 @@
     }
 
     // Startzustand
-        // Startzustand
     updateCfgInfo();
-        function loadRemoteConfig(){
-      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
-
-      fetch(url)
-        .then(resp => resp.json())
-        .then(data => {
-          if (data && data.ok && data.config) {
-            CONFIG = Object.assign(CONFIG, data.config);
-            updateCfgInfo();
-          }
-        })
-        .catch(err => {
-          console.error('CONFIG LOAD ERROR', err);
-        });
-    }
     loadRemoteConfig();  // zentrale Einstellungen nachladen
     showStart();
   </script>

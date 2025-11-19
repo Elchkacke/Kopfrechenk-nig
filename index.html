@@ -728,9 +728,13 @@
           const avgTime = (stats.avgTime || 0).toFixed(1);
 
           // Alle Klassen extrahieren
-          const classes = Array.from(
-            new Set(runs.map(r => r.group).filter(Boolean))
-          ).sort((a,b) => a.localeCompare(b, 'de'));
+         const classes = Array.from(
+  new Set(
+    runs
+      .map(r => r.group || "")
+      .filter(c => typeof c === "string" && c.trim() !== "")
+  )
+).sort((a, b) => (""+a).localeCompare(""+b, "de"));
 
           // globale Operator-Stats
           const opStats = (stats.opStats) || {};

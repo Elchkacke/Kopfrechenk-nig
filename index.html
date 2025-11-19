@@ -347,6 +347,15 @@
         });
     }
 
+    /********** Hilfsfunktion für sicheres Sortieren von Strings **********/
+    function safeStringSort(arr) {
+      return arr.sort((a, b) => {
+        const sa = (a == null ? '' : String(a));
+        const sb = (b == null ? '' : String(b));
+        return sa.localeCompare(sb, 'de');
+      });
+    }
+
     /********** Aufgaben-Generator **********/
     function randInt(a,b){
       return Math.floor(Math.random() * (b - a + 1)) + a;
@@ -535,7 +544,7 @@
         score: correct * 10,
         tasks: taskPayload,
         durations: taskDurations,
-        admin_key: TEACHER_PIN  // muss zu REQUIRED_PIN im Apps Script passen
+        admin_key: TEACHER_PIN
       };
 
       try {
@@ -729,14 +738,16 @@
           const avgAcc = (stats.avgAcc || 0).toFixed(1);
           const avgTime = (stats.avgTime || 0).toFixed(1);
 
-          // Klassenliste robust extrahieren
-          const classes = Array.from(
-            new Set(
-              runs
-                .map(r => (typeof r.group === 'string' ? r.group.trim() : ''))
-                .filter(c => c !== '')
+          // Klassenliste robust extrahieren + sortieren
+          const classes = safeStringSort(
+            Array.from(
+              new Set(
+                runs
+                  .map(r => (typeof r.group === 'string' ? r.group.trim() : ''))
+                  .filter(c => c !== '')
+              )
             )
-          ).sort((a,b) => a.localeCompare(b));
+          );
 
           // globale Operator-Stats
           const opStats = (stats.opStats) || {};
@@ -825,7 +836,7 @@
                 .map(r => r.name)
                 .filter(Boolean)
             );
-            const students = Array.from(studentsSet).sort((a,b) => a.localeCompare(b));
+            const students = safeStringSort(Array.from(studentsSet));
 
             const prevStudent = selectedStudent;
             studentSelect.innerHTML = `
@@ -849,7 +860,7 @@
               filteredRuns = filteredRuns.filter(r => r.name === finalStudent);
             }
 
-            // Klassen-Statistik (nur nach Klasse)
+            // Klassen-Statistik
             let classRuns = runs;
             if (selectedClass !== '__all') {
               classRuns = runs.filter(r => r.group === selectedClass);

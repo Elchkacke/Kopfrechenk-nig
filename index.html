@@ -350,18 +350,27 @@
         `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
     }
 
-    // Klassen-Normalisierung: "5 a", "5A" → "5a"
-    function normalizeClassInput(raw){
-      if (!raw) return '';
-      let s = String(raw).trim().toLowerCase();
-      s = s.replace(/\s+/g, ''); // Leerzeichen entfernen
-      // Muster wie 5a, 6b, 10c
-      const m = s.match(/^(\d+)([a-z])$/);
-      if (m) {
-        return m[1] + m[2]; // z.B. "5a"
-      }
-      return s;
-    }
+    // Klassen-Normalisierung: "5 c", "5C..", "5c:", "5c." → "5c"
+function normalizeClassInput(raw){
+  if (!raw) return '';
+
+  // In String umwandeln und kleinschreiben
+  let s = String(raw).toLowerCase();
+
+  // Alle Zeichen entfernen, die keine Ziffern oder Buchstaben sind
+  // (also Punkte, Doppelpunkte, Leerzeichen, Kommas, etc.)
+  s = s.replace(/[^a-z0-9]+/g, '');
+
+  // Muster wie "5a", "10b", "7c"
+  const m = s.match(/^(\d+)([a-z])$/);
+  if (m) {
+    return m[1] + m[2]; // z.B. "5a"
+  }
+
+  // Fallback: einfach die bereinigte Variante zurückgeben
+  return s;
+}
+
 
     // String-Sort-Helfer
     function safeStringSort(arr) {

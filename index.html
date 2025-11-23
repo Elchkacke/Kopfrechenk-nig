@@ -293,7 +293,10 @@
     <div id="dashboardPanel">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
         <h2 style="margin:0">📊 Lehrer-Dashboard</h2>
-        <button id="dashboardClose" class="secondary">Schließen</button>
+        <div>
+          <button id="dashboardPdf" class="secondary">📄 PDF Export</button>
+          <button id="dashboardClose" class="secondary">Schließen</button>
+        </div>
       </div>
       <div id="dashboardContent">Noch keine Ergebnisse vorhanden.</div>
     </div>
@@ -326,6 +329,24 @@
         `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
     }
 
+    // Klassennamen vereinheitlichen (5 a / 5A -> 5a)
+    function normalizeClass(str) {
+      if (!str) return "";
+      return String(str)
+        .toLowerCase()
+        .replace(/\s+/g, "")  // Leerzeichen raus
+        .replace(/-/g, "");   // Bindestriche raus
+    }
+
+    // String-Sortierung robust
+    function safeStringSort(arr) {
+      return arr.sort((a, b) => {
+        const sa = (a == null ? '' : String(a));
+        const sb = (b == null ? '' : String(b));
+        return sa.localeCompare(sb, 'de');
+      });
+    }
+
     // zentrale Konfiguration vom Server laden
     function loadRemoteConfig(){
       if (typeof SERVER_URL === 'undefined' || typeof TEACHER_PIN === 'undefined') {
@@ -345,15 +366,6 @@
         .catch(err => {
           console.error('CONFIG LOAD ERROR', err);
         });
-    }
-
-    /********** Hilfsfunktion für sicheres Sortieren von Strings **********/
-    function safeStringSort(arr) {
-      return arr.sort((a, b) => {
-        const sa = (a == null ? '' : String(a));
-        const sb = (b == null ? '' : String(b));
-        return sa.localeCompare(sb, 'de');
-      });
     }
 
     /********** Aufgaben-Generator **********/
@@ -564,7 +576,7 @@
     /********** Schüler-Events **********/
     S('btnStart').addEventListener('click', () => {
       studentName = S('inpName').value.trim();
-      studentClass = S('inpClass').value.trim();
+      studentClass = normalizeClass(S('inpClass').value);  // HIER normalisiert
       if (!studentName || !studentClass) {
         alert('Bitte Name und Klasse eingeben.');
         return;
@@ -694,7 +706,7 @@
       setTimeout(closeTeacher, 700);
     });
 
-    /********** Dashboard (zentral, mit Fortschritt) **********/
+    /********** Dashboard (zentral, mit Level/Badges) **********/
     const dashOverlay = S('dashboardOverlay');
     const dashContent = S('dashboardContent');
 
@@ -732,18 +744,25 @@
             return;
           }
 
-          const runs = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
+          const rawRuns = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
           const stats = data.stats || {};
-          const totalRuns = stats.totalRuns || runs.length;
+          const totalRuns = stats.totalRuns || rawRuns.length;
           const avgAcc = (stats.avgAcc || 0).toFixed(1);
           const avgTime = (stats.avgTime || 0).toFixed(1);
 
-          // Klassenliste robust extrahieren + sortieren
+          // Runs anreichern mit normalisierter Klasse
+          const runs = rawRuns.map(r => ({
+            ...r,
+            nGroup: normalizeClass(r.group),
+            nName: (r.name || '').trim()
+          }));
+
+          // Klassenliste aus normalisierten Klassen
           const classes = safeStringSort(
             Array.from(
               new Set(
                 runs
-                  .map(r => (typeof r.group === 'string' ? r.group.trim() : ''))
+                  .map(r => r.nGroup)
                   .filter(c => c !== '')
               )
             )
@@ -824,16 +843,24 @@
           const classStatsDiv = document.getElementById('dashClassStats');
           const studentStatsDiv = document.getElementById('dashStudentStats');
           const runsTableDiv = document.getElementById('dashRunsTable');
+          const pdfBtn = document.getElementById('dashboardPdf');
+
+          if (pdfBtn) {
+            pdfBtn.addEventListener('click', () => {
+              const link = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=pdf';
+              window.open(link, '_blank');
+            });
+          }
 
           function updateFilters(){
             const selectedClass = classSelect.value;
             const selectedStudent = studentSelect.value;
 
-            // Schülerliste für gewählte Klasse
+            // Schülerliste für gewählte Klasse (nach normalisierter Klasse)
             const studentsSet = new Set(
               runs
-                .filter(r => selectedClass === '__all' || r.group === selectedClass)
-                .map(r => r.name)
+                .filter(r => selectedClass === '__all' || r.nGroup === selectedClass)
+                .map(r => r.nName)
                 .filter(Boolean)
             );
             const students = safeStringSort(Array.from(studentsSet));
@@ -854,16 +881,16 @@
             // Runs nach Filter
             let filteredRuns = runs;
             if (selectedClass !== '__all') {
-              filteredRuns = filteredRuns.filter(r => r.group === selectedClass);
+              filteredRuns = filteredRuns.filter(r => r.nGroup === selectedClass);
             }
             if (finalStudent !== '__all') {
-              filteredRuns = filteredRuns.filter(r => r.name === finalStudent);
+              filteredRuns = filteredRuns.filter(r => r.nName === finalStudent);
             }
 
             // Klassen-Statistik
             let classRuns = runs;
             if (selectedClass !== '__all') {
-              classRuns = runs.filter(r => r.group === selectedClass);
+              classRuns = runs.filter(r => r.nGroup === selectedClass);
             }
             const classTrainings = classRuns.length;
             const classTotalTasks = classRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
@@ -903,11 +930,11 @@
               </div>
             `;
 
-            // Einzelauswertung (Schüler)
+            // Einzelauswertung (Schüler) mit Level + Badges
             if (finalStudent !== '__all') {
               const studentRuns = runs.filter(r =>
-                r.name === finalStudent &&
-                (selectedClass === '__all' || r.group === selectedClass)
+                r.nName === finalStudent &&
+                (selectedClass === '__all' || r.nGroup === selectedClass)
               );
               const sTrainings = studentRuns.length;
               const sTotalTasks = studentRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
@@ -916,6 +943,14 @@
               const sAcc = sTotalTasks ? (sTotalCorrect / sTotalTasks * 100).toFixed(1) : '0.0';
               const sAvgTime = sTrainings ? (sTotalTime / sTrainings).toFixed(1) : '0.0';
               const sScore = sTotalCorrect * 10;
+              const sLevel = Math.floor(sScore / 500) + 1;
+
+              const badges = [];
+              if (sTrainings >= 1) badges.push("🏅 Starter");
+              if (sTotalCorrect >= 100) badges.push("🔥 100 korrekt");
+              if (sAvgTime > 0 && sAvgTime < 2) badges.push("⚡ Schnellrechner");
+              if (sTrainings >= 10) badges.push("📚 10 Trainings");
+              if (sLevel >= 5) badges.push("🎖️ Level 5");
 
               studentStatsDiv.innerHTML = `
                 <div class="label">Einzelauswertung: ${finalStudent}${selectedClass !== '__all' ? ' ('+selectedClass+')' : ''}</div>
@@ -937,6 +972,10 @@
                     <div>${sScore}</div>
                   </div>
                   <div>
+                    <div class="label">Level</div>
+                    <div style="font-size:22px;">${sLevel}</div>
+                  </div>
+                  <div>
                     <div class="label">Ø Trefferquote</div>
                     <div>${sAcc}%</div>
                   </div>
@@ -944,6 +983,10 @@
                     <div class="label">Ø Zeit pro Training</div>
                     <div>${sAvgTime} s</div>
                   </div>
+                </div>
+                <div style="margin-top:8px;">
+                  <div class="label">Badges</div>
+                  <div style="font-size:20px;">${badges.join(" ") || "—"}</div>
                 </div>
               `;
             } else {
@@ -958,8 +1001,8 @@
               const score = (r.correct || 0) * 10;
               return `<tr>
                         <td>${dateStr}</td>
-                        <td>${r.name}</td>
-                        <td>${r.group}</td>
+                        <td>${r.nName}</td>
+                        <td>${r.nGroup}</td>
                         <td>${r.correct}/${r.total}</td>
                         <td>${pct}%</td>
                         <td>${timeText} s</td>

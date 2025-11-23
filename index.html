@@ -179,7 +179,7 @@
     #dashboardPanel {
       background:white;
       border-radius:12px;
-      max-width:700px;
+      max-width:900px;
       width:95%;
       max-height:90vh;
       overflow:auto;
@@ -189,6 +189,27 @@
     }
     #dashboardPanel h2 { margin-top:0; }
     #dashboardPanel table { font-size:13px; }
+
+    /* kleine Print-Anpassung für PDF */
+    @media print {
+      #topBar,
+      #teacherOverlay,
+      #dashboardOverlay button.secondary {
+        display:none !important;
+      }
+      body {
+        background:white;
+        padding:0;
+      }
+      #dashboardOverlay {
+        position:static;
+        background:none;
+      }
+      #dashboardPanel {
+        max-width:100%;
+        box-shadow:none;
+      }
+    }
   </style>
 
   <!-- Konfiguration (PIN, Server-URL, Startwerte) -->
@@ -294,7 +315,7 @@
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
         <h2 style="margin:0">📊 Lehrer-Dashboard</h2>
         <div>
-          <button id="dashboardPdf" class="secondary">📄 PDF Export</button>
+          <button id="dashboardPrint" class="secondary">📄 Drucken / PDF</button>
           <button id="dashboardClose" class="secondary">Schließen</button>
         </div>
       </div>
@@ -329,16 +350,20 @@
         `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
     }
 
-    // Klassennamen vereinheitlichen (5 a / 5A -> 5a)
-    function normalizeClass(str) {
-      if (!str) return "";
-      return String(str)
-        .toLowerCase()
-        .replace(/\s+/g, "")  // Leerzeichen raus
-        .replace(/-/g, "");   // Bindestriche raus
+    // Klassen-Normalisierung: "5 a", "5A" → "5a"
+    function normalizeClassInput(raw){
+      if (!raw) return '';
+      let s = String(raw).trim().toLowerCase();
+      s = s.replace(/\s+/g, ''); // Leerzeichen entfernen
+      // Muster wie 5a, 6b, 10c
+      const m = s.match(/^(\d+)([a-z])$/);
+      if (m) {
+        return m[1] + m[2]; // z.B. "5a"
+      }
+      return s;
     }
 
-    // String-Sortierung robust
+    // String-Sort-Helfer
     function safeStringSort(arr) {
       return arr.sort((a, b) => {
         const sa = (a == null ? '' : String(a));
@@ -347,7 +372,47 @@
       });
     }
 
-    // zentrale Konfiguration vom Server laden
+    /********** Level & Badges **********/
+    function getLevelForScore(score) {
+      if (score >= 1000) return 'Level 4 – Mathe-Meister';
+      if (score >= 500)  return 'Level 3 – Zahlenprofi';
+      if (score >= 250)  return 'Level 2 – Rechenkünstler';
+      if (score >= 100)  return 'Level 1 – Einsteiger';
+      return 'Level 0 – Starter';
+    }
+
+    function getBadgesForStudent(studentRuns) {
+      const badges = [];
+      if (!studentRuns || !studentRuns.length) return badges;
+
+      const trainings = studentRuns.length;
+      let totalTasks = 0;
+      let totalCorrect = 0;
+      let totalTime = 0;
+      let bestAcc = 0;
+
+      studentRuns.forEach(r => {
+        const t = r.total || 0;
+        const c = r.correct || 0;
+        const time = r.time || 0;
+        totalTasks += t;
+        totalCorrect += c;
+        totalTime += time;
+        const acc = t ? (c / t * 100) : 0;
+        if (acc > bestAcc) bestAcc = acc;
+      });
+
+      const avgTimePerTask = totalTasks ? (totalTime / totalTasks) : 0;
+
+      if (bestAcc >= 100) badges.push('🏅 Perfekte Runde');
+      if (trainings >= 10) badges.push('🎓 Durchhalteprofi');
+      if (avgTimePerTask > 0 && avgTimePerTask <= 3) badges.push('⚡ Schnellrechner');
+      if (totalCorrect >= 200) badges.push('⭐ Punkte-Sammler');
+
+      return badges;
+    }
+
+    /********** zentrale Konfiguration vom Server laden **********/
     function loadRemoteConfig(){
       if (typeof SERVER_URL === 'undefined' || typeof TEACHER_PIN === 'undefined') {
         console.error('SERVER_URL oder TEACHER_PIN nicht definiert (config.js prüfen)');
@@ -498,12 +563,15 @@
       const total = tasks.length;
       const durationSec = (Date.now() - startTime) / 1000;
       const pct = total > 0 ? (correct / total * 100 * 1.0).toFixed(1) : '0.0';
+      const score = correct * 10;
+      const levelText = getLevelForScore(score);
 
       S('resultText').innerHTML =
         '<p>' + studentName + ' (' + studentClass + ')</p>' +
         '<p>Richtig: ' + correct + ' von ' + total + ' (' + pct + '%)</p>' +
         '<p>Gesamtzeit: ' + durationSec.toFixed(1) + ' s (Ø ' +
         (durationSec/total).toFixed(2) + ' s pro Aufgabe)</p>' +
+        '<p>Punkte dieser Runde: ' + score + ' – ' + levelText + '</p>' +
         '<hr>' + detail;
 
       S('detailTable').innerHTML =
@@ -576,7 +644,7 @@
     /********** Schüler-Events **********/
     S('btnStart').addEventListener('click', () => {
       studentName = S('inpName').value.trim();
-      studentClass = normalizeClass(S('inpClass').value);  // HIER normalisiert
+      studentClass = normalizeClassInput(S('inpClass').value.trim()); // Klasseneingabe normalisieren
       if (!studentName || !studentClass) {
         alert('Bitte Name und Klasse eingeben.');
         return;
@@ -706,7 +774,7 @@
       setTimeout(closeTeacher, 700);
     });
 
-    /********** Dashboard (zentral, mit Level/Badges) **********/
+    /********** Dashboard (zentral, mit Fortschritt/Level/Badges) **********/
     const dashOverlay = S('dashboardOverlay');
     const dashContent = S('dashboardContent');
 
@@ -717,6 +785,11 @@
     function closeDashboard(){ dashOverlay.style.display = 'none'; }
 
     S('dashboardClose').addEventListener('click', closeDashboard);
+    S('dashboardPrint').addEventListener('click', () => {
+      // Browser-Druckdialog → PDF möglich
+      window.print();
+    });
+
     dashOverlay.addEventListener('click', (e)=>{
       if (e.target === dashOverlay) closeDashboard();
     });
@@ -744,29 +817,23 @@
             return;
           }
 
-          const rawRuns = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
+          const runs = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
           const stats = data.stats || {};
-          const totalRuns = stats.totalRuns || rawRuns.length;
+          const totalRuns = stats.totalRuns || runs.length;
           const avgAcc = (stats.avgAcc || 0).toFixed(1);
           const avgTime = (stats.avgTime || 0).toFixed(1);
 
-          // Runs anreichern mit normalisierter Klasse
-          const runs = rawRuns.map(r => ({
-            ...r,
-            nGroup: normalizeClass(r.group),
-            nName: (r.name || '').trim()
-          }));
-
-          // Klassenliste aus normalisierten Klassen
-          const classes = safeStringSort(
-            Array.from(
-              new Set(
-                runs
-                  .map(r => r.nGroup)
-                  .filter(c => c !== '')
-              )
-            )
-          );
+          // Klassen zusammenfassen (5a, 5 a, 5A → 5a)
+          const classKeyToLabel = {};
+          runs.forEach(r => {
+            const key = normalizeClassInput(r.group);
+            if (!key) return;
+            if (!classKeyToLabel[key]) {
+              classKeyToLabel[key] = key; // einfache Anzeige "5a"
+            }
+          });
+          const classEntries = Object.entries(classKeyToLabel);
+          const classes = safeStringSort(classEntries.map(e => e[0]));
 
           // globale Operator-Stats
           const opStats = (stats.opStats) || {};
@@ -807,7 +874,7 @@
                 Klasse:
                 <select id="dashClassSelect">
                   <option value="__all">Alle Klassen</option>
-                  ${classes.map(c => `<option value="${c}">${c}</option>`).join('')}
+                  ${classes.map(key => `<option value="${key}">${classKeyToLabel[key]}</option>`).join('')}
                 </select>
               </label>
               <label>
@@ -843,24 +910,16 @@
           const classStatsDiv = document.getElementById('dashClassStats');
           const studentStatsDiv = document.getElementById('dashStudentStats');
           const runsTableDiv = document.getElementById('dashRunsTable');
-          const pdfBtn = document.getElementById('dashboardPdf');
-
-          if (pdfBtn) {
-            pdfBtn.addEventListener('click', () => {
-              const link = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=pdf';
-              window.open(link, '_blank');
-            });
-          }
 
           function updateFilters(){
-            const selectedClass = classSelect.value;
+            const selectedClassKey = classSelect.value;
             const selectedStudent = studentSelect.value;
 
-            // Schülerliste für gewählte Klasse (nach normalisierter Klasse)
+            // Schülerliste für gewählte Klasse (Klassen-Schreibweisen zusammengefasst)
             const studentsSet = new Set(
               runs
-                .filter(r => selectedClass === '__all' || r.nGroup === selectedClass)
-                .map(r => r.nName)
+                .filter(r => selectedClassKey === '__all' || normalizeClassInput(r.group) === selectedClassKey)
+                .map(r => r.name)
                 .filter(Boolean)
             );
             const students = safeStringSort(Array.from(studentsSet));
@@ -880,17 +939,17 @@
 
             // Runs nach Filter
             let filteredRuns = runs;
-            if (selectedClass !== '__all') {
-              filteredRuns = filteredRuns.filter(r => r.nGroup === selectedClass);
+            if (selectedClassKey !== '__all') {
+              filteredRuns = filteredRuns.filter(r => normalizeClassInput(r.group) === selectedClassKey);
             }
             if (finalStudent !== '__all') {
-              filteredRuns = filteredRuns.filter(r => r.nName === finalStudent);
+              filteredRuns = filteredRuns.filter(r => r.name === finalStudent);
             }
 
             // Klassen-Statistik
             let classRuns = runs;
-            if (selectedClass !== '__all') {
-              classRuns = runs.filter(r => r.nGroup === selectedClass);
+            if (selectedClassKey !== '__all') {
+              classRuns = runs.filter(r => normalizeClassInput(r.group) === selectedClassKey);
             }
             const classTrainings = classRuns.length;
             const classTotalTasks = classRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
@@ -899,9 +958,10 @@
             const classAcc = classTotalTasks ? (classTotalCorrect / classTotalTasks * 100).toFixed(1) : '0.0';
             const classAvgTime = classTrainings ? (classTotalTime / classTrainings).toFixed(1) : '0.0';
             const classScore = classTotalCorrect * 10;
+            const classLevel = getLevelForScore(classScore);
 
             classStatsDiv.innerHTML = `
-              <div class="label">Klassen-Auswertung${selectedClass !== '__all' ? ': ' + selectedClass : ''}</div>
+              <div class="label">Klassen-Auswertung${selectedClassKey !== '__all' ? ': ' + classKeyToLabel[selectedClassKey] : ''}</div>
               <div class="stats-grid" style="margin-top:4px;">
                 <div>
                   <div class="label">Trainings (Klasse)</div>
@@ -920,6 +980,10 @@
                   <div>${classScore}</div>
                 </div>
                 <div>
+                  <div class="label">Klassen-Level</div>
+                  <div>${classLevel}</div>
+                </div>
+                <div>
                   <div class="label">Ø Trefferquote (Klasse)</div>
                   <div>${classAcc}%</div>
                 </div>
@@ -933,8 +997,8 @@
             // Einzelauswertung (Schüler) mit Level + Badges
             if (finalStudent !== '__all') {
               const studentRuns = runs.filter(r =>
-                r.nName === finalStudent &&
-                (selectedClass === '__all' || r.nGroup === selectedClass)
+                r.name === finalStudent &&
+                (selectedClassKey === '__all' || normalizeClassInput(r.group) === selectedClassKey)
               );
               const sTrainings = studentRuns.length;
               const sTotalTasks = studentRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
@@ -943,17 +1007,11 @@
               const sAcc = sTotalTasks ? (sTotalCorrect / sTotalTasks * 100).toFixed(1) : '0.0';
               const sAvgTime = sTrainings ? (sTotalTime / sTrainings).toFixed(1) : '0.0';
               const sScore = sTotalCorrect * 10;
-              const sLevel = Math.floor(sScore / 500) + 1;
-
-              const badges = [];
-              if (sTrainings >= 1) badges.push("🏅 Starter");
-              if (sTotalCorrect >= 100) badges.push("🔥 100 korrekt");
-              if (sAvgTime > 0 && sAvgTime < 2) badges.push("⚡ Schnellrechner");
-              if (sTrainings >= 10) badges.push("📚 10 Trainings");
-              if (sLevel >= 5) badges.push("🎖️ Level 5");
+              const sLevel = getLevelForScore(sScore);
+              const sBadges = getBadgesForStudent(studentRuns);
 
               studentStatsDiv.innerHTML = `
-                <div class="label">Einzelauswertung: ${finalStudent}${selectedClass !== '__all' ? ' ('+selectedClass+')' : ''}</div>
+                <div class="label">Einzelauswertung: ${finalStudent}${selectedClassKey !== '__all' ? ' ('+classKeyToLabel[selectedClassKey]+')' : ''}</div>
                 <div class="stats-grid" style="margin-top:4px;">
                   <div>
                     <div class="label">Trainings</div>
@@ -973,7 +1031,7 @@
                   </div>
                   <div>
                     <div class="label">Level</div>
-                    <div style="font-size:22px;">${sLevel}</div>
+                    <div>${sLevel}</div>
                   </div>
                   <div>
                     <div class="label">Ø Trefferquote</div>
@@ -983,10 +1041,10 @@
                     <div class="label">Ø Zeit pro Training</div>
                     <div>${sAvgTime} s</div>
                   </div>
-                </div>
-                <div style="margin-top:8px;">
-                  <div class="label">Badges</div>
-                  <div style="font-size:20px;">${badges.join(" ") || "—"}</div>
+                  <div>
+                    <div class="label">Badges</div>
+                    <div>${sBadges.length ? sBadges.join(' · ') : '—'}</div>
+                  </div>
                 </div>
               `;
             } else {
@@ -1001,8 +1059,8 @@
               const score = (r.correct || 0) * 10;
               return `<tr>
                         <td>${dateStr}</td>
-                        <td>${r.nName}</td>
-                        <td>${r.nGroup}</td>
+                        <td>${r.name}</td>
+                        <td>${normalizeClassInput(r.group)}</td>
                         <td>${r.correct}/${r.total}</td>
                         <td>${pct}%</td>
                         <td>${timeText} s</td>
@@ -1020,7 +1078,7 @@
                     <th>Richtig</th>
                     <th>Quote</th>
                     <th>Zeit</th>
-                    <th>Punkte</th>
+                    <th>Punkte (Runde)</th>
                   </tr>
                 </thead>
                 <tbody>

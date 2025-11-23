@@ -786,6 +786,7 @@ function normalizeClassInput(raw){
     /********** Dashboard (zentral, mit Fortschritt/Level/Badges) **********/
     const dashOverlay = S('dashboardOverlay');
     const dashContent = S('dashboardContent');
+    const totalPoints = runs.reduce((sum, r) => sum + (r.correct || 0) * 10, 0);
 
     function openDashboard(){
       dashOverlay.style.display = 'flex';
@@ -862,19 +863,25 @@ function normalizeClassInput(raw){
             .join('');
 
           dashContent.innerHTML = `
-            <div class="stats-grid">
-              <div>
-                <div class="label">Gesamttrainings</div>
-                <div style="font-size:24px;">${totalRuns}</div>
-              </div>
-              <div>
-                <div class="label">Ø Trefferquote (alle)</div>
-                <div style="font-size:24px;">${avgAcc}%</div>
-              </div>
-              <div>
-                <div class="label">Ø Zeit pro Training (alle)</div>
-                <div style="font-size:24px;">${avgTime} s</div>
-              </div>
+           <div class="stats-grid">
+  <div>
+    <div class="label">Gesamttrainings</div>
+    <div style="font-size:24px;">${totalRuns}</div>
+  </div>
+  <div>
+    <div class="label">Ø Trefferquote (alle)</div>
+    <div style="font-size:24px;">${avgAcc}%</div>
+  </div>
+  <div>
+    <div class="label">Ø Zeit pro Training (alle)</div>
+    <div style="font-size:24px;">${avgTime} s</div>
+  </div>
+  <div>
+    <div class="label">Punkte gesamt (alle)</div>
+    <div style="font-size:24px;">${totalPoints}</div>
+  </div>
+</div>
+
             </div>
 
             <h3 style="margin-top:16px;">Filter</h3>

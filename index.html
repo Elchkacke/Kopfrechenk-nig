@@ -179,7 +179,7 @@
     #dashboardPanel {
       background:white;
       border-radius:12px;
-      max-width:700px;
+      max-width:900px;
       width:95%;
       max-height:90vh;
       overflow:auto;
@@ -189,6 +189,7 @@
     }
     #dashboardPanel h2 { margin-top:0; }
     #dashboardPanel table { font-size:13px; }
+    #dashLeaderboard h4 { margin:8px 0 4px; }
   </style>
 
   <!-- Konfiguration (PIN, Server-URL, Startwerte) -->
@@ -320,58 +321,57 @@
 
     const S = id => document.getElementById(id);
 
-    // Fallbacks, falls config.js nicht geladen wurde
-    const PIN = (typeof TEACHER_PIN !== 'undefined') ? TEACHER_PIN : '1234';
-    const API_URL = (typeof SERVER_URL !== 'undefined') ? SERVER_URL : '';
-
     function updateCfgInfo(){
       const opsText = (CONFIG.ops && CONFIG.ops.length) ? CONFIG.ops.join(' ') : '—';
       S('cfgInfo').textContent =
-        `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
+        'Konfiguration: ' + CONFIG.count + ' Aufgaben, Bereich ' +
+        CONFIG.min + '–' + CONFIG.max + ', Ops: ' + opsText;
     }
 
-    // zentrale Konfiguration vom Server laden (wenn möglich)
+    // Klassen vereinheitlichen (5a, 5A, 5 a, 5a:, 5a.. → "5a")
+    function normalizeClassLabel(raw) {
+      if (!raw) return '';
+      let s = String(raw).toLowerCase();
+      s = s.replace(/[^a-z0-9]+/g, '');   // alles außer Buchstaben/Ziffern raus
+      const m = s.match(/^(\\d+)([a-z])$/);
+      if (m) return m[1] + m[2];
+      return s;
+    }
+
+    /********** Remote-Konfiguration laden **********/
     function loadRemoteConfig(){
-      if (!API_URL) {
-        console.warn('Keine SERVER_URL gesetzt – nutze lokale Standardwerte.');
-        S('cfgInfo').textContent =
-          `Konfiguration: (lokal) ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${(CONFIG.ops || []).join(' ') || '—'}`;
+      try {
+        if (typeof SERVER_URL === 'undefined' || typeof TEACHER_PIN === 'undefined') {
+          console.error('SERVER_URL oder TEACHER_PIN nicht definiert (config.js prüfen)');
+          return;
+        }
+      } catch (e) {
+        console.error('config.js nicht geladen oder fehlerhaft', e);
         return;
       }
-      const url = API_URL + '?key=' + encodeURIComponent(PIN) + '&mode=config';
+
+      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
 
       fetch(url)
         .then(resp => resp.json())
         .then(data => {
           if (data && data.ok && data.config) {
             CONFIG = Object.assign(CONFIG, data.config);
-            updateCfgInfo();
-          } else {
-            console.warn('Remote-Konfiguration ohne ok/config:', data);
           }
+          updateCfgInfo();
         })
         .catch(err => {
           console.error('CONFIG LOAD ERROR', err);
         });
     }
 
-    /********** Hilfsfunktionen **********/
+    /********** Hilfsfunktion für sicheres Sortieren von Strings **********/
     function safeStringSort(arr) {
       return arr.sort((a, b) => {
         const sa = (a == null ? '' : String(a));
         const sb = (b == null ? '' : String(b));
         return sa.localeCompare(sb, 'de');
       });
-    }
-
-    // Klasse normalisieren: "5A", "5 a", "5a:", "5a.." -> "5a"
-    function normalizeClass(str) {
-      if (!str) return '';
-      let s = String(str).toLowerCase();
-      s = s.replace(/[^a-z0-9]+/g, '');
-      const m = s.match(/^(\d+)([a-z])$/);
-      if (m) return m[1] + m[2];
-      return s;
     }
 
     /********** Aufgaben-Generator **********/
@@ -490,43 +490,46 @@
           ' (deine Antwort: ' + userAns + (ok ? ' ✓' : ' ✗') + ')<br>';
 
         rows.push(
-          `<tr class="${ok ? '' : 'bad-row'}">
-             <td>${i+1}</td>
-             <td>${t.a} ${t.op} ${t.b}</td>
-             <td>${t.erg}</td>
-             <td>${userAns ?? '—'}</td>
-             <td>${ok ? '✓' : '✗'}</td>
-             <td>${duration.toFixed(1)} s</td>
-           </tr>`
+          '<tr class="' + (ok ? '' : 'bad-row') + '">' +
+            '<td>' + (i+1) + '</td>' +
+            '<td>' + t.a + ' ' + t.op + ' ' + t.b + '</td>' +
+            '<td>' + t.erg + '</td>' +
+            '<td>' + (userAns ?? '—') + '</td>' +
+            '<td>' + (ok ? '✓' : '✗') + '</td>' +
+            '<td>' + duration.toFixed(1) + ' s</td>' +
+          '</tr>'
         );
       }
 
       const total = tasks.length;
       const durationSec = (Date.now() - startTime) / 1000;
-      const pct = total > 0 ? (correct / total * 100 * 1.0).toFixed(1) : '0.0';
+      const pct = total > 0 ? (correct / total * 100).toFixed(1) : '0.0';
       const roundScore = correct * 10;
 
       S('resultText').innerHTML =
         '<p>' + studentName + ' (' + studentClass + ')</p>' +
         '<p>Richtig: ' + correct + ' von ' + total + ' (' + pct + '%)</p>' +
         '<p>Gesamtzeit: ' + durationSec.toFixed(1) + ' s (Ø ' +
-        (durationSec/total).toFixed(2) + ' s pro Aufgabe)</p>' +
+          (durationSec/total).toFixed(2) + ' s pro Aufgabe)</p>' +
         '<p><strong>Punkte in dieser Runde: ' + roundScore + '</strong></p>' +
         '<hr>' + detail;
 
       S('detailTable').innerHTML =
-        '<table class="result-table"><thead><tr><th>#</th><th>Aufgabe</th><th>Lösung</th><th>Antwort</th><th>Richtig?</th><th>Zeit</th></tr></thead><tbody>' +
-        rows.join('') + '</tbody></table>';
+        '<table class="result-table"><thead><tr>' +
+          '<th>#</th><th>Aufgabe</th><th>Lösung</th><th>Antwort</th><th>Richtig?</th><th>Zeit</th>' +
+        '</tr></thead><tbody>' +
+        rows.join('') +
+        '</tbody></table>';
 
       const hotspotBlocks = Object.entries(opStats).map(([op, stat]) => {
         const acc = stat.total ? (stat.correct / stat.total * 100).toFixed(1) : '0.0';
         const avgTime = stat.total ? (stat.time / stat.total).toFixed(1) : '0.0';
         const highlight = stat.correct / stat.total < 0.75 ? ' style="color:#b91c1c;font-weight:600;"' : '';
-        return `<div${highlight}>
-                  <div class="label">${op}</div>
-                  <div>Trefferquote: ${acc}%</div>
-                  <div>Ø Zeit: ${avgTime} s</div>
-                </div>`;
+        return '<div' + highlight + '>' +
+                 '<div class="label">' + op + '</div>' +
+                 '<div>Trefferquote: ' + acc + '%</div>' +
+                 '<div>Ø Zeit: ' + avgTime + ' s</div>' +
+               '</div>';
       });
 
       S('hotspotSummary').innerHTML =
@@ -564,16 +567,11 @@
         score: correct * 10,
         tasks: taskPayload,
         durations: taskDurations,
-        admin_key: PIN
+        admin_key: TEACHER_PIN
       };
 
-      if (!API_URL) {
-        S('status').textContent = 'Server-URL nicht konfiguriert (Ergebnisse nur lokal sichtbar).';
-        return;
-      }
-
       try {
-        await fetch(API_URL, {
+        await fetch(SERVER_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: {'Content-Type': 'text/plain;charset=utf-8'},
@@ -680,7 +678,7 @@
 
     S('teacherApply').addEventListener('click', ()=>{
       const pin = S('teacherPin').value.trim();
-      if (pin !== PIN) {
+      if (pin !== TEACHER_PIN) {
         S('teacherMsg').textContent = 'Falsche PIN.';
         return;
       }
@@ -702,28 +700,24 @@
       updateCfgInfo();
       S('teacherMsg').textContent = 'Konfiguration übernommen (Server wird aktualisiert …)';
 
-      if (!API_URL) {
-        S('teacherMsg').textContent += ' (Server-URL fehlt, nichts gesendet)';
-      } else {
-        const payload = {
-          type: 'config',
-          admin_key: PIN,
-          config: CONFIG
-        };
-        fetch(API_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify(payload)
-        }).catch(e => {
-          console.error('CONFIG SEND ERROR', e);
-        });
-      }
+      const payload = {
+        type: 'config',
+        admin_key: TEACHER_PIN,
+        config: CONFIG
+      };
+      fetch(SERVER_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      }).catch(e => {
+        console.error('CONFIG SEND ERROR', e);
+      });
 
       setTimeout(closeTeacher, 700);
     });
 
-    /********** Dashboard (mit Punkten, Klassen-Normalisierung & Ranking) **********/
+    /********** Dashboard (zentral, mit Punkten & Ranking) **********/
     const dashOverlay = S('dashboardOverlay');
     const dashContent = S('dashboardContent');
 
@@ -739,13 +733,9 @@
     });
 
     S('btnDashboard').addEventListener('click', () => {
-      if (!API_URL) {
-        alert('Server-URL nicht konfiguriert – kein Dashboard möglich.');
-        return;
-      }
       const pin = prompt('Lehrer-PIN für Dashboard:');
       if (pin === null) return;
-      if (pin.trim() !== PIN) {
+      if (pin.trim() !== TEACHER_PIN) {
         alert('Falsche PIN.');
         return;
       }
@@ -753,14 +743,9 @@
     });
 
     function renderDashboard(){
-      if (!API_URL) {
-        dashContent.textContent = 'Server-URL nicht konfiguriert.';
-        return;
-      }
-
       dashContent.textContent = 'Lade Daten vom Server …';
 
-      const url = API_URL + '?key=' + encodeURIComponent(PIN);
+      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN);
 
       fetch(url)
         .then(resp => resp.json())
@@ -770,25 +755,18 @@
             return;
           }
 
-          // Runs mit normalisierter Klasse
-          const runs = (data.runs || [])
-            .map(r => ({
-              ...r,
-              normGroup: normalizeClass(r.group)
-            }))
-            .sort((a,b) => new Date(b.ts) - new Date(a.ts));
-
+          const runs = (data.runs || []).slice().sort((a,b) => new Date(b.ts) - new Date(a.ts));
           const stats = data.stats || {};
-          const totalRuns = stats.totalRuns || runs.length;
+          const totalRuns = stats.totalRuns || runs.length || 0;
           const avgAcc = (stats.avgAcc || 0).toFixed(1);
           const avgTime = (stats.avgTime || 0).toFixed(1);
 
-          // Klassenliste aus normGroup
+          // Alle Klassen normalisiert + sortiert
           const classes = safeStringSort(
             Array.from(
               new Set(
                 runs
-                  .map(r => r.normGroup)
+                  .map(r => normalizeClassLabel(r.group))
                   .filter(c => c !== '')
               )
             )
@@ -803,95 +781,152 @@
               return { op, stat, acc, avg };
             })
             .sort((a,b) => Number(a.acc) - Number(b.acc))
-            .map(row => `<tr>
-                           <td>${row.op}</td>
-                           <td>${row.stat.correct}/${row.stat.total}</td>
-                           <td>${row.acc}%</td>
-                           <td>${row.avg} s</td>
-                         </tr>`)
+            .map(row => '<tr>' +
+                           '<td>' + row.op + '</td>' +
+                           '<td>' + row.stat.correct + '/' + row.stat.total + '</td>' +
+                           '<td>' + row.acc + '%</td>' +
+                           '<td>' + row.avg + ' s</td>' +
+                         '</tr>')
             .join('');
 
-          dashContent.innerHTML = `
-            <div class="stats-grid">
-              <div>
-                <div class="label">Gesamttrainings</div>
-                <div style="font-size:24px;">${totalRuns}</div>
-              </div>
-              <div>
-                <div class="label">Ø Trefferquote (alle)</div>
-                <div style="font-size:24px;">${avgAcc}%</div>
-              </div>
-              <div>
-                <div class="label">Ø Zeit pro Training (alle)</div>
-                <div style="font-size:24px;">${avgTime} s</div>
-              </div>
-            </div>
+          dashContent.innerHTML = '' +
+            '<div class="stats-grid">' +
+              '<div>' +
+                '<div class="label">Gesamttrainings</div>' +
+                '<div style="font-size:24px;">' + totalRuns + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="label">Ø Trefferquote (alle)</div>' +
+                '<div style="font-size:24px;">' + avgAcc + '%</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="label">Ø Zeit pro Training (alle)</div>' +
+                '<div style="font-size:24px;">' + avgTime + ' s</div>' +
+              '</div>' +
+            '</div>' +
 
-            <h3 style="margin-top:16px;">Filter</h3>
-            <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <label>
-                Klasse:
-                <select id="dashClassSelect">
-                  <option value="__all">Alle Klassen</option>
-                  ${classes.map(c => `<option value="${c}">${c}</option>`).join('')}
-                </select>
-              </label>
-              <label>
-                Schüler:
-                <select id="dashStudentSelect">
-                  <option value="__all">Alle Schüler</option>
-                </select>
-              </label>
-            </div>
+            '<h3 style="margin-top:16px;">Filter</h3>' +
+            '<div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">' +
+              '<label>Klasse:' +
+                '<select id="dashClassSelect">' +
+                  '<option value="__all">Alle Klassen</option>' +
+                  classes.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
+                '</select>' +
+              '</label>' +
+              '<label>Schüler:' +
+                '<select id="dashStudentSelect">' +
+                  '<option value="__all">Alle Schüler</option>' +
+                '</select>' +
+              '</label>' +
+            '</div>' +
 
-            <div id="dashClassStats"></div>
-            <div id="dashStudentStats" style="margin-top:12px;"></div>
+            '<div id="dashClassStats"></div>' +
+            '<div id="dashStudentStats" style="margin-top:12px;"></div>' +
+            '<div id="dashLeaderboard" style="margin-top:12px;"></div>' +
 
-            <h3 style="margin-top:16px;">Ranking</h3>
-            <div id="rankingBox"></div>
+            '<h3 style="margin-top:16px;">Letzte Ergebnisse (gefiltert)</h3>' +
+            '<div id="dashRunsTable"></div>' +
 
-            <h3 style="margin-top:16px;">Letzte Ergebnisse (gefiltert)</h3>
-            <div id="dashRunsTable"></div>
-
-            <h3 style="margin-top:16px;">Fehlerschwerpunkte (alle Schüler)</h3>
-            <table class="result-table">
-              <thead>
-                <tr>
-                  <th>Operator</th>
-                  <th>Richtig</th>
-                  <th>Quote</th>
-                  <th>Ø Zeit</th>
-                </tr>
-              </thead>
-              <tbody>${hotspotRows || '<tr><td colspan="4">Keine Daten</td></tr>'}</tbody>
-            </table>
-          `;
+            '<h3 style="margin-top:16px;">Fehlerschwerpunkte (alle Schüler)</h3>' +
+            '<table class="result-table">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Operator</th>' +
+                  '<th>Richtig</th>' +
+                  '<th>Quote</th>' +
+                  '<th>Ø Zeit</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + (hotspotRows || '<tr><td colspan="4">Keine Daten</td></tr>') + '</tbody>' +
+            '</table>';
 
           const classSelect = document.getElementById('dashClassSelect');
           const studentSelect = document.getElementById('dashStudentSelect');
           const classStatsDiv = document.getElementById('dashClassStats');
           const studentStatsDiv = document.getElementById('dashStudentStats');
+          const leaderboardDiv = document.getElementById('dashLeaderboard');
           const runsTableDiv = document.getElementById('dashRunsTable');
-          const rankingBox = document.getElementById('rankingBox');
+
+          function computeLeaderboard(classRuns) {
+            const now = new Date();
+            const oneDay = 24 * 60 * 60 * 1000;
+            const oneWeek = 7 * oneDay;
+            const oneMonth = 30 * oneDay;
+
+            const todayMap = {};
+            const weekMap = {};
+            const monthMap = {};
+
+            classRuns.forEach(r => {
+              if (!r.name) return;
+              const ts = new Date(r.ts);
+              const diff = now - ts;
+              const pts = (r.correct || 0) * 10;
+
+              if (diff <= oneDay) {
+                todayMap[r.name] = (todayMap[r.name] || 0) + pts;
+              }
+              if (diff <= oneWeek) {
+                weekMap[r.name] = (weekMap[r.name] || 0) + pts;
+              }
+              if (diff <= oneMonth) {
+                monthMap[r.name] = (monthMap[r.name] || 0) + pts;
+              }
+            });
+
+            function top3(map) {
+              return Object.entries(map)
+                .sort((a,b) => b[1] - a[1])
+                .slice(0,3);
+            }
+
+            const tTop = top3(todayMap);
+            const wTop = top3(weekMap);
+            const mTop = top3(monthMap);
+
+            let html = '';
+            html += '<h3>🏅 Ranking (nach Punkten, Klasse)</h3>';
+
+            function block(title, rows) {
+              if (!rows.length) {
+                return '<div><h4>' + title + '</h4><p>Keine Daten.</p></div>';
+              }
+              return '<div><h4>' + title + '</h4>' +
+                     '<ol>' +
+                        rows.map(([name,score]) =>
+                          '<li>' + name + ' – ' + score + ' Punkte</li>'
+                        ).join('') +
+                     '</ol></div>';
+            }
+
+            html += '<div class="stats-grid" style="margin-top:4px;">' +
+                      block('Tagessieger', tTop) +
+                      block('Wochensieger', wTop) +
+                      block('Monatssieger', mTop) +
+                    '</div>';
+            return html;
+          }
 
           function updateFilters(){
-            const selectedClass = classSelect.value;
+            const selectedClassNorm = normalizeClassLabel(classSelect.value === '__all' ? '' : classSelect.value);
             const selectedStudent = studentSelect.value;
 
-            // Schülerliste für gewählte Klasse (nach normGroup)
+            // Schülerliste für gewählte Klasse (normalisiert)
             const studentsSet = new Set(
               runs
-                .filter(r => selectedClass === '__all' || r.normGroup === selectedClass)
+                .filter(r => {
+                  if (selectedClassNorm === '') return true;
+                  return normalizeClassLabel(r.group) === selectedClassNorm;
+                })
                 .map(r => r.name)
                 .filter(Boolean)
             );
             const students = safeStringSort(Array.from(studentsSet));
 
             const prevStudent = selectedStudent;
-            studentSelect.innerHTML = `
-              <option value="__all">Alle Schüler</option>
-              ${students.map(s => `<option value="${s}">${s}</option>`).join('')}
-            `;
+            studentSelect.innerHTML =
+              '<option value="__all">Alle Schüler</option>' +
+              students.map(s => '<option value="' + s + '">' + s + '</option>').join('');
             if (students.includes(prevStudent)) {
               studentSelect.value = prevStudent;
             } else {
@@ -900,20 +935,21 @@
 
             const finalStudent = studentSelect.value;
 
-            // Runs nach Filter
+            // Runs nach Filter (Klasse + Schüler)
             let filteredRuns = runs;
-            if (selectedClass !== '__all') {
-              filteredRuns = filteredRuns.filter(r => r.normGroup === selectedClass);
+            if (selectedClassNorm !== '') {
+              filteredRuns = filteredRuns.filter(r => normalizeClassLabel(r.group) === selectedClassNorm);
             }
             if (finalStudent !== '__all') {
               filteredRuns = filteredRuns.filter(r => r.name === finalStudent);
             }
 
-            // Klassen-Statistik (normGroup)
+            // Klassen-Runs (nur nach Klasse, für Statistik+Ranking)
             let classRuns = runs;
-            if (selectedClass !== '__all') {
-              classRuns = runs.filter(r => r.normGroup === selectedClass);
+            if (selectedClassNorm !== '') {
+              classRuns = runs.filter(r => normalizeClassLabel(r.group) === selectedClassNorm);
             }
+
             const classTrainings = classRuns.length;
             const classTotalTasks = classRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
             const classTotalCorrect = classRuns.reduce((sum,r)=>sum + (r.correct || 0), 0);
@@ -922,41 +958,33 @@
             const classAvgTime = classTrainings ? (classTotalTime / classTrainings).toFixed(1) : '0.0';
             const classScore = classTotalCorrect * 10;
 
-            classStatsDiv.innerHTML = `
-              <div class="label">Klassen-Auswertung${selectedClass !== '__all' ? ': ' + selectedClass : ''}</div>
-              <div class="stats-grid" style="margin-top:4px;">
-                <div>
-                  <div class="label">Trainings (Klasse)</div>
-                  <div>${classTrainings}</div>
-                </div>
-                <div>
-                  <div class="label">Aufgaben gesamt (Klasse)</div>
-                  <div>${classTotalTasks}</div>
-                </div>
-                <div>
-                  <div class="label">Richtig gesamt (Klasse)</div>
-                  <div>${classTotalCorrect}</div>
-                </div>
-                <div>
-                  <div class="label">Punkte gesamt (Klasse)</div>
-                  <div>${classScore}</div>
-                </div>
-                <div>
-                  <div class="label">Ø Trefferquote (Klasse)</div>
-                  <div>${classAcc}%</div>
-                </div>
-                <div>
-                  <div class="label">Ø Zeit pro Training (Klasse)</div>
-                  <div>${classAvgTime} s</div>
-                </div>
-              </div>
-            `;
+            classStatsDiv.innerHTML =
+              '<div class="label">Klassen-Auswertung' +
+              (selectedClassNorm !== '' ? ': ' + selectedClassNorm : '') +
+              '</div>' +
+              '<div class="stats-grid" style="margin-top:4px;">' +
+                '<div><div class="label">Trainings (Klasse)</div><div>' + classTrainings + '</div></div>' +
+                '<div><div class="label">Aufgaben gesamt (Klasse)</div><div>' + classTotalTasks + '</div></div>' +
+                '<div><div class="label">Richtig gesamt (Klasse)</div><div>' + classTotalCorrect + '</div></div>' +
+                '<div><div class="label">Punkte gesamt (Klasse)</div><div>' + classScore + '</div></div>' +
+                '<div><div class="label">Ø Trefferquote (Klasse)</div><div>' + classAcc + '%</div></div>' +
+                '<div><div class="label">Ø Zeit pro Training (Klasse)</div><div>' + classAvgTime + ' s</div></div>' +
+              '</div>';
+
+            // Ranking pro Klasse
+            if (selectedClassNorm !== '') {
+              leaderboardDiv.innerHTML = computeLeaderboard(classRuns);
+            } else {
+              leaderboardDiv.innerHTML =
+                '<h3>🏅 Ranking</h3>' +
+                '<p>Bitte eine Klasse wählen, um Tagessieger / Wochensieger / Monatssieger zu sehen.</p>';
+            }
 
             // Einzelauswertung (Schüler)
             if (finalStudent !== '__all') {
               const studentRuns = runs.filter(r =>
                 r.name === finalStudent &&
-                (selectedClass === '__all' || r.normGroup === selectedClass)
+                (selectedClassNorm === '' || normalizeClassLabel(r.group) === selectedClassNorm)
               );
               const sTrainings = studentRuns.length;
               const sTotalTasks = studentRuns.reduce((sum,r)=>sum + (r.total || 0), 0);
@@ -966,150 +994,55 @@
               const sAvgTime = sTrainings ? (sTotalTime / sTrainings).toFixed(1) : '0.0';
               const sScore = sTotalCorrect * 10;
 
-              studentStatsDiv.innerHTML = `
-                <div class="label">Einzelauswertung: ${finalStudent}${selectedClass !== '__all' ? ' ('+selectedClass+')' : ''}</div>
-                <div class="stats-grid" style="margin-top:4px;">
-                  <div>
-                    <div class="label">Trainings</div>
-                    <div>${sTrainings}</div>
-                  </div>
-                  <div>
-                    <div class="label">Aufgaben gesamt</div>
-                    <div>${sTotalTasks}</div>
-                  </div>
-                  <div>
-                    <div class="label">Richtig gesamt</div>
-                    <div>${sTotalCorrect}</div>
-                  </div>
-                  <div>
-                    <div class="label">Punkte gesamt</div>
-                    <div>${sScore}</div>
-                  </div>
-                  <div>
-                    <div class="label">Ø Trefferquote</div>
-                    <div>${sAcc}%</div>
-                  </div>
-                  <div>
-                    <div class="label">Ø Zeit pro Training</div>
-                    <div>${sAvgTime} s</div>
-                  </div>
-                </div>
-              `;
+              studentStatsDiv.innerHTML =
+                '<div class="label">Einzelauswertung: ' + finalStudent +
+                (selectedClassNorm !== '' ? ' ('+selectedClassNorm+')' : '') + '</div>' +
+                '<div class="stats-grid" style="margin-top:4px;">' +
+                  '<div><div class="label">Trainings</div><div>' + sTrainings + '</div></div>' +
+                  '<div><div class="label">Aufgaben gesamt</div><div>' + sTotalTasks + '</div></div>' +
+                  '<div><div class="label">Richtig gesamt</div><div>' + sTotalCorrect + '</div></div>' +
+                  '<div><div class="label">Punkte gesamt</div><div>' + sScore + '</div></div>' +
+                  '<div><div class="label">Ø Trefferquote</div><div>' + sAcc + '%</div></div>' +
+                  '<div><div class="label">Ø Zeit pro Training</div><div>' + sAvgTime + ' s</div></div>' +
+                '</div>';
             } else {
               studentStatsDiv.innerHTML = '';
             }
 
-            // Ranking: Tagessieger / Wochensieger / Monatssieger pro Klasse
-            function topWinners(runsArr, days) {
-              const now = Date.now();
-              const ms = days * 24 * 60 * 60 * 1000;
-              const since = now - ms;
-
-              const subset = runsArr.filter(r => {
-                const t = new Date(r.ts).getTime();
-                return !isNaN(t) && t >= since;
-              });
-
-              const byStudent = {};
-              subset.forEach(r => {
-                const name = r.name || 'Unbekannt';
-                const score = (r.correct || 0) * 10;
-                if (!byStudent[name]) {
-                  byStudent[name] = {
-                    name,
-                    score: 0,
-                    correct: 0,
-                    total: 0,
-                    trainings: 0
-                  };
-                }
-                const s = byStudent[name];
-                s.score += score;
-                s.correct += (r.correct || 0);
-                s.total += (r.total || 0);
-                s.trainings += 1;
-              });
-
-              const arr = Object.values(byStudent).sort((a,b) => {
-                if (b.score !== a.score) return b.score - a.score;
-                if (b.correct !== a.correct) return b.correct - a.correct;
-                return (a.name || '').localeCompare(b.name || '', 'de');
-              });
-
-              return arr.slice(0, 3); // Top 3
-            }
-
-            function renderRankingSection(title, winners) {
-              if (!winners.length) {
-                return `
-                  <div>
-                    <div class="label">${title}</div>
-                    <div>Keine Daten im Zeitraum.</div>
-                  </div>
-                `;
-              }
-              const rows = winners.map((w, idx) => {
-                const quote = w.total ? (w.correct / w.total * 100).toFixed(1) : '0.0';
-                return `<div>
-                          ${idx+1}. ${w.name} – ${w.score} Punkte
-                          (Trefferquote: ${quote}%)
-                        </div>`;
-              }).join('');
-              return `
-                <div>
-                  <div class="label">${title}</div>
-                  ${rows}
-                </div>
-              `;
-            }
-
-            const dayWinners = topWinners(classRuns, 1);
-            const weekWinners = topWinners(classRuns, 7);
-            const monthWinners = topWinners(classRuns, 30);
-
-            rankingBox.innerHTML = `
-              <div class="stats-grid" style="margin-top:4px;">
-                ${renderRankingSection('Tagessieger', dayWinners)}
-                ${renderRankingSection('Wochensieger', weekWinners)}
-                ${renderRankingSection('Monatssieger', monthWinners)}
-              </div>
-            `;
-
-            // Tabelle gefilterter Runs (zeigt die originale Gruppen-Schreibweise)
-            const rowsHtml = filteredRuns.slice(0, 20).map(r => {
-              const dateStr = new Date(r.ts).toLocaleString();
+            // Tabelle gefilterter Runs
+            const rowsHtml = filteredRuns.slice(0, 30).map(r => {
+              const dateStr = new Date(r.ts).toLocaleString('de-DE');
               const pct = r.total ? (r.correct / r.total * 100).toFixed(1) : '0.0';
               const timeText = (r.time || 0).toFixed(1);
               const score = (r.correct || 0) * 10;
-              return `<tr>
-                        <td>${dateStr}</td>
-                        <td>${r.name}</td>
-                        <td>${r.group}</td>
-                        <td>${r.correct}/${r.total}</td>
-                        <td>${pct}%</td>
-                        <td>${timeText} s</td>
-                        <td>${score}</td>
-                      </tr>`;
+              return '<tr>' +
+                        '<td>' + dateStr + '</td>' +
+                        '<td>' + r.name + '</td>' +
+                        '<td>' + r.group + '</td>' +
+                        '<td>' + r.correct + '/' + r.total + '</td>' +
+                        '<td>' + pct + '%</td>' +
+                        '<td>' + timeText + ' s</td>' +
+                        '<td>' + score + '</td>' +
+                     '</tr>';
             }).join('');
 
-            runsTableDiv.innerHTML = `
-              <table class="result-table">
-                <thead>
-                  <tr>
-                    <th>Datum</th>
-                    <th>Name</th>
-                    <th>Klasse</th>
-                    <th>Richtig</th>
-                    <th>Quote</th>
-                    <th>Zeit</th>
-                    <th>Punkte</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rowsHtml || '<tr><td colspan="7">Keine Daten für diese Auswahl.</td></tr>'}
-                </tbody>
-              </table>
-            `;
+            runsTableDiv.innerHTML =
+              '<table class="result-table">' +
+                '<thead>' +
+                  '<tr>' +
+                    '<th>Datum</th>' +
+                    '<th>Name</th>' +
+                    '<th>Klasse (roh)</th>' +
+                    '<th>Richtig</th>' +
+                    '<th>Quote</th>' +
+                    '<th>Zeit</th>' +
+                    '<th>Punkte</th>' +
+                  '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                  (rowsHtml || '<tr><td colspan="7">Keine Daten für diese Auswahl.</td></tr>') +
+                '</tbody>' +
+              '</table>';
           }
 
           classSelect.addEventListener('change', updateFilters);

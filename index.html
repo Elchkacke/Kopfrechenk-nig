@@ -320,19 +320,26 @@
 
     const S = id => document.getElementById(id);
 
+    // Fallbacks, falls config.js nicht geladen wurde
+    const PIN = (typeof TEACHER_PIN !== 'undefined') ? TEACHER_PIN : '1234';
+    const API_URL = (typeof SERVER_URL !== 'undefined') ? SERVER_URL : '';
+
     function updateCfgInfo(){
       const opsText = (CONFIG.ops && CONFIG.ops.length) ? CONFIG.ops.join(' ') : '—';
       S('cfgInfo').textContent =
         `Konfiguration: ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${opsText}`;
     }
 
-    // zentrale Konfiguration vom Server laden
+    // zentrale Konfiguration vom Server laden (wenn möglich)
     function loadRemoteConfig(){
-      if (typeof SERVER_URL === 'undefined' || typeof TEACHER_PIN === 'undefined') {
-        console.error('SERVER_URL oder TEACHER_PIN nicht definiert (config.js prüfen)');
+      if (!API_URL) {
+        console.warn('Keine SERVER_URL gesetzt – nutze lokale Standardwerte.');
+        // Text leicht anpassen, damit man sieht, dass der Server nicht verwendet wird
+        S('cfgInfo').textContent =
+          `Konfiguration: (lokal) ${CONFIG.count} Aufgaben, Bereich ${CONFIG.min}–${CONFIG.max}, Ops: ${(CONFIG.ops || []).join(' ') || '—'}`;
         return;
       }
-      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN) + '&mode=config';
+      const url = API_URL + '?key=' + encodeURIComponent(PIN) + '&mode=config';
 
       fetch(url)
         .then(resp => resp.json())
@@ -340,6 +347,8 @@
           if (data && data.ok && data.config) {
             CONFIG = Object.assign(CONFIG, data.config);
             updateCfgInfo();
+          } else {
+            console.warn('Remote-Konfiguration ohne ok/config:', data);
           }
         })
         .catch(err => {
@@ -546,11 +555,16 @@
         score: correct * 10,
         tasks: taskPayload,
         durations: taskDurations,
-        admin_key: TEACHER_PIN
+        admin_key: PIN
       };
 
+      if (!API_URL) {
+        S('status').textContent = 'Server-URL nicht konfiguriert (Ergebnisse nur lokal sichtbar).';
+        return;
+      }
+
       try {
-        await fetch(SERVER_URL, {
+        await fetch(API_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: {'Content-Type': 'text/plain;charset=utf-8'},
@@ -657,7 +671,7 @@
 
     S('teacherApply').addEventListener('click', ()=>{
       const pin = S('teacherPin').value.trim();
-      if (pin !== TEACHER_PIN) {
+      if (pin !== PIN) {
         S('teacherMsg').textContent = 'Falsche PIN.';
         return;
       }
@@ -679,19 +693,23 @@
       updateCfgInfo();
       S('teacherMsg').textContent = 'Konfiguration übernommen (Server wird aktualisiert …)';
 
-      const payload = {
-        type: 'config',
-        admin_key: TEACHER_PIN,
-        config: CONFIG
-      };
-      fetch(SERVER_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      }).catch(e => {
-        console.error('CONFIG SEND ERROR', e);
-      });
+      if (!API_URL) {
+        S('teacherMsg').textContent += ' (Server-URL fehlt, nichts gesendet)';
+      } else {
+        const payload = {
+          type: 'config',
+          admin_key: PIN,
+          config: CONFIG
+        };
+        fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify(payload)
+        }).catch(e => {
+          console.error('CONFIG SEND ERROR', e);
+        });
+      }
 
       setTimeout(closeTeacher, 700);
     });
@@ -712,9 +730,13 @@
     });
 
     S('btnDashboard').addEventListener('click', () => {
+      if (!API_URL) {
+        alert('Server-URL nicht konfiguriert – kein Dashboard möglich.');
+        return;
+      }
       const pin = prompt('Lehrer-PIN für Dashboard:');
       if (pin === null) return;
-      if (pin.trim() !== TEACHER_PIN) {
+      if (pin.trim() !== PIN) {
         alert('Falsche PIN.');
         return;
       }
@@ -722,9 +744,14 @@
     });
 
     function renderDashboard(){
+      if (!API_URL) {
+        dashContent.textContent = 'Server-URL nicht konfiguriert.';
+        return;
+      }
+
       dashContent.textContent = 'Lade Daten vom Server …';
 
-      const url = SERVER_URL + '?key=' + encodeURIComponent(TEACHER_PIN);
+      const url = API_URL + '?key=' + encodeURIComponent(PIN);
 
       fetch(url)
         .then(resp => resp.json())

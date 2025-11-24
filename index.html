@@ -368,9 +368,9 @@
     function normalizeClass(str) {
       if (!str) return '';
       let s = String(str).toLowerCase();
-      s = s.replace(/[^a-z0-9]+/g, ''); // alles raus außer Buchstaben/Ziffern
+      s = s.replace(/[^a-z0-9]+/g, '');
       const m = s.match(/^(\d+)([a-z])$/);
-      if (m) return m[1] + m[2]; // z.B. "5c"
+      if (m) return m[1] + m[2];
       return s;
     }
 
@@ -723,7 +723,7 @@
       setTimeout(closeTeacher, 700);
     });
 
-    /********** Dashboard (zentral, mit Punkten & Klassen-Normalisierung) **********/
+    /********** Dashboard (mit Punkten, Klassen-Normalisierung & Ranking) **********/
     const dashOverlay = S('dashboardOverlay');
     const dashContent = S('dashboardContent');
 
@@ -847,6 +847,9 @@
             <div id="dashClassStats"></div>
             <div id="dashStudentStats" style="margin-top:12px;"></div>
 
+            <h3 style="margin-top:16px;">Ranking</h3>
+            <div id="rankingBox"></div>
+
             <h3 style="margin-top:16px;">Letzte Ergebnisse (gefiltert)</h3>
             <div id="dashRunsTable"></div>
 
@@ -869,6 +872,7 @@
           const classStatsDiv = document.getElementById('dashClassStats');
           const studentStatsDiv = document.getElementById('dashStudentStats');
           const runsTableDiv = document.getElementById('dashRunsTable');
+          const rankingBox = document.getElementById('rankingBox');
 
           function updateFilters(){
             const selectedClass = classSelect.value;
@@ -995,7 +999,83 @@
               studentStatsDiv.innerHTML = '';
             }
 
-            // Tabelle gefilterter Runs (zeigt weiterhin die originale Gruppen-Schreibweise)
+            // Ranking: Tagessieger / Wochensieger / Monatssieger pro Klasse
+            function topWinners(runsArr, days) {
+              const now = Date.now();
+              const ms = days * 24 * 60 * 60 * 1000;
+              const since = now - ms;
+
+              const subset = runsArr.filter(r => {
+                const t = new Date(r.ts).getTime();
+                return !isNaN(t) && t >= since;
+              });
+
+              const byStudent = {};
+              subset.forEach(r => {
+                const name = r.name || 'Unbekannt';
+                const score = (r.correct || 0) * 10;
+                if (!byStudent[name]) {
+                  byStudent[name] = {
+                    name,
+                    score: 0,
+                    correct: 0,
+                    total: 0,
+                    trainings: 0
+                  };
+                }
+                const s = byStudent[name];
+                s.score += score;
+                s.correct += (r.correct || 0);
+                s.total += (r.total || 0);
+                s.trainings += 1;
+              });
+
+              const arr = Object.values(byStudent).sort((a,b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if (b.correct !== a.correct) return b.correct - a.correct;
+                return (a.name || '').localeCompare(b.name || '', 'de');
+              });
+
+              return arr.slice(0, 3); // Top 3
+            }
+
+            function renderRankingSection(title, winners) {
+              if (!winners.length) {
+                return `
+                  <div>
+                    <div class="label">${title}</div>
+                    <div>Keine Daten im Zeitraum.</div>
+                  </div>
+                `;
+              }
+              const rows = winners.map((w, idx) => {
+                const quote = w.total ? (w.correct / w.total * 100).toFixed(1) : '0.0';
+                return `<div>
+                          ${idx+1}. ${w.name} – ${w.score} Punkte
+                          (Trefferquote: ${quote}%)
+                        </div>`;
+              }).join('');
+              return `
+                <div>
+                  <div class="label">${title}</div>
+                  ${rows}
+                </div>
+              `;
+            }
+
+            const dayWinners = topWinners(classRuns, 1);
+            const weekWinners = topWinners(classRuns, 7);
+            const monthWinners = topWinners(classRuns, 30);
+
+            rankingBox.innerHTML = `
+              <div class="stats-grid" style="margin-top:4px;">
+                ${renderRankingSection('Tagessieger', dayWinners)}
+                ${renderRankingSection('Wochensieger', weekWinners)}
+                ${renderRankingSection('Monatssieger', monthWinners)}
+              </div>
+            `;
+
+            // Tabelle gefilterter Runs (zeigt die originale Gruppen-Schreibweise)
             const rowsHtml = filteredRuns.slice(0, 20).map(r => {
               const dateStr = new Date(r.ts).toLocaleString();
               const pct = r.total ? (r.correct / r.total * 100).toFixed(1) : '0.0';
